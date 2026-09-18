@@ -520,12 +520,46 @@ export const beatDesignCommandSchema: z.ZodType<BeatDesignCommand> =
     editorValidateCommandSchema,
   ]);
 
+/**
+ * An open command envelope for commands that are not part of the closed legacy
+ * `BeatDesignCommand` union. Relational domain commands (`story.*`, `scene.*`,
+ * `shot.*`) are carried by this envelope: the transport only recognizes `type`
+ * (a non-empty string) and passes the rest through, then the registered handler
+ * schema validates the payload. This lets a new domain command be added by
+ * registration without growing the central union.
+ *
+ * Legacy type names are refused here so a malformed known command (e.g. an
+ * `editor.apply` missing a required `clipId`) can never fall through the
+ * strict legacy union into the open envelope and slip past the boundary — it
+ * still fails at the schema.
+ */
+const LEGACY_COMMAND_TYPE_NAMES = [
+  'canvas.apply',
+  'editor.apply',
+  'editor.replace_document',
+  'editor.validate',
+];
+
+const openCommandEnvelopeSchema = z
+  .object({
+    type: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .refine(
+        (value) => !LEGACY_COMMAND_TYPE_NAMES.includes(value),
+        'The command belongs to a known built-in type and failed its strict payload validation.'
+      ),
+  })
+  .passthrough();
+
 const commandRequestBaseSchema = z
   .object({
     commandId: commandIdSchema.optional(),
     expectedRevision: z.number().int().min(0).nullable().optional(),
     idempotencyKey: commandIdSchema.nullable().optional(),
-    command: beatDesignCommandSchema,
+    command: beatDesignCommandSchema.or(openCommandEnvelopeSchema),
   })
   .strict();
 

@@ -27,16 +27,34 @@ import {
   loadCommandReceipt,
   loadCommandReceiptRecord,
   storeCommandReceipt,
+  type StoredCommandResult,
 } from './receipts';
+import type { DispatchCommandEnvelope } from './registry';
 
 const inFlightCommands = new Map<
   string,
   {
     commandId: string;
-    commandType: BeatDesignCommand['type'];
+    commandType: string;
     promise: Promise<BeatDesignCommandResult<BeatDesignCommandData>>;
   }
 >();
+
+/**
+ * An open command shape. Built-in document commands (canvas/editor) are a
+ * closed `BeatDesignCommand` union that remains the legacy compatibility
+ * surface; relational domain commands (story.* / scene.* / shot.*) are carried
+ * as this open `{ type: string } & unknown` shape and validated by their
+ * registered handler schema.
+ */
+type OpenCommand = { type: string } & Record<string, unknown>;
+
+const LEGACY_CMD_TYPES = new Set<BeatDesignCommand['type']>([
+  'canvas.apply',
+  'editor.apply',
+  'editor.replace_document',
+  'editor.validate',
+]);
 
 const isVersionConflict = (error: unknown) =>
   error instanceof Error &&
@@ -57,7 +75,7 @@ type PersistCommandInput = {
   commandId: string;
   expectedRevision?: number | null;
   idempotencyKey: string;
-  command: BeatDesignCommand;
+  command: OpenCommand;
 };
 
 const timelineClipCount = (document: NonNullable<BeatDesignCommandData['timeline']>) =>
@@ -126,12 +144,16 @@ export function validateExternalCommandAssetReferences({
   command,
 }: {
   origin: BeatDesignCommandOrigin;
-  command: BeatDesignCommand;
+  command: OpenCommand;
 }) {
   if (origin !== 'mcp' && origin !== 'cli') return;
   if (command.type !== 'canvas.apply') return;
+  const canvasCommand = command as Extract<
+    BeatDesignCommand,
+    { type: 'canvas.apply' }
+  >;
 
-  for (const operation of command.operations) {
+  for (const operation of canvasCommand.operations) {
     if (operation.type === 'upsert_card') {
       const { card } = operation;
       if (
@@ -208,12 +230,26 @@ async function persistBeatDesignCommandOnce({
   }
 
   try {
-    validateExternalCommandAssetReferences({ origin, command });
-    const normalizedCommand = await normalizeCommandAssetReferences({
-      projectId,
-      command,
-    });
-    const envelope: BeatDesignCommandEnvelope<BeatDesignCommand> = {
+    // Legacy document commands go through the existing asset-reference
+    // normalization/validation. Relational domain commands pass through as-is;
+    // their payload is validated by the registered handler schema.
+    const isLegacy = LEGACY_CMD_TYPES.has(
+      command.type as BeatDesignCommand['type']
+    );
+    if (isLegacy) {
+      validateExternalCommandAssetReferences({
+        origin,
+        command,
+      });
+    }
+    const normalizedCommand = isLegacy
+      ? await normalizeCommandAssetReferences({
+          projectId,
+          command: command as BeatDesignCommand,
+        })
+      : command;
+
+    const envelope: BeatDesignCommandEnvelope<BeatDesignCommand | OpenCommand> = {
       commandId,
       projectId,
       origin,
@@ -222,8 +258,8 @@ async function persistBeatDesignCommandOnce({
       command: normalizedCommand,
     };
 
-    // Route document load/save by the registered handler's declared target and
-    // persist flag, so adding a command type only requires a handler — not a
+    // Route by the registered handler's persistence kind. Adding a new command
+    // type (document or relational domain) only requires a handler — not a
     // growing central `if (type === ...)` dispatcher.
     const handler = commandRegistry.get(normalizedCommand.type);
     if (!handler) {
@@ -236,8 +272,26 @@ async function persistBeatDesignCommandOnce({
       });
     }
 
+    // Relational domain commands: dispatch through the registry's async path to
+    // the Story/Scene/Shot domain service, then persist a durable receipt.
+    if (handler.persistence.kind === 'domain') {
+      const executed = await commandRegistry.executeAsync(
+        envelope as DispatchCommandEnvelope
+      );
+      if (!executed.ok) return executed;
+      return storeCommandReceipt({
+        projectId,
+        idempotencyKey,
+        commandId,
+        origin,
+        commandType: normalizedCommand.type,
+        result: executed as StoredCommandResult,
+      });
+    }
+
+    // Document commands (Canvas / Timeline) under the existing document CAS.
     let result: BeatDesignCommandResult<BeatDesignCommandData>;
-    if (handler.target === 'canvas') {
+    if (handler.persistence.kind === 'document' && handler.persistence.target === 'canvas') {
       const state = await loadProjectWithLatestSnapshot({ projectId });
       if (!state) {
         return createCommandFailure({
@@ -249,7 +303,7 @@ async function persistBeatDesignCommandOnce({
         });
       }
       const executed = executeBeatDesignCommand({
-        envelope,
+        envelope: envelope as BeatDesignCommandEnvelope<BeatDesignCommand>,
         documents: { canvas: state.snapshot },
       });
       if (!executed.ok || !executed.data.canvas) return executed;
@@ -265,11 +319,13 @@ async function persistBeatDesignCommandOnce({
     } else {
       const timeline = await loadProjectTimeline(projectId);
       const executed = executeBeatDesignCommand({
-        envelope,
+        envelope: envelope as BeatDesignCommandEnvelope<BeatDesignCommand>,
         documents: { timeline: timeline?.document ?? null },
       });
       if (!executed.ok) return executed;
-      if (!handler.persist) {
+      if (!handler.persistence.write) {
+        // Read/validate-only command (e.g. editor.validate): no new revision,
+        // no receipt.
         return { ...executed, revision: timeline?.version };
       }
       if (!executed.data.timeline) return executed;
@@ -371,7 +427,7 @@ export function persistBeatDesignCommand({
   commandId?: string;
   expectedRevision?: number | null;
   idempotencyKey?: string | null;
-  command: BeatDesignCommand;
+  command: OpenCommand;
 }): Promise<BeatDesignCommandResult<BeatDesignCommandData>> {
   if (
     command.type === 'editor.replace_document' &&
@@ -389,21 +445,23 @@ export function persistBeatDesignCommand({
       })
     );
   }
-  try {
-    validateExternalCommandAssetReferences({ origin, command });
-  } catch (error) {
-    if (error instanceof BeatDesignCommandError) {
-      return Promise.resolve(
-        createCommandFailure({
-          commandId,
-          projectId,
-          origin,
-          code: error.code,
-          message: error.message,
-        })
-      );
+  if (LEGACY_CMD_TYPES.has(command.type as BeatDesignCommand['type'])) {
+    try {
+      validateExternalCommandAssetReferences({ origin, command });
+    } catch (error) {
+      if (error instanceof BeatDesignCommandError) {
+        return Promise.resolve(
+          createCommandFailure({
+            commandId,
+            projectId,
+            origin,
+            code: error.code,
+            message: error.message,
+          })
+        );
+      }
+      throw error;
     }
-    throw error;
   }
   const stableIdempotencyKey = idempotencyKey?.trim() || commandId;
   const lockKey = `${projectId}:${stableIdempotencyKey}`;

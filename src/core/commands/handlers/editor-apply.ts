@@ -13,8 +13,7 @@ export const editorApplyHandler: CommandHandler<
 > = {
   commandType: 'editor.apply',
   schema: editorApplyHandlerSchema,
-  target: 'timeline',
-  persist: true,
+  persistence: { kind: 'document', target: 'timeline', write: true },
   execute(context, command) {
     const source =
       context.documents.timeline ??

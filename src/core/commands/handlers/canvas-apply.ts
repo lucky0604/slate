@@ -13,8 +13,7 @@ export const canvasApplyHandler: CommandHandler<
 > = {
   commandType: 'canvas.apply',
   schema: canvasApplyHandlerSchema,
-  target: 'canvas',
-  persist: true,
+  persistence: { kind: 'document', target: 'canvas', write: true },
   execute(context, command) {
     if (!context.documents.canvas) {
       throw new BeatDesignCommandError(

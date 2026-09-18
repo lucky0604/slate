@@ -12,8 +12,7 @@ export const editorReplaceDocumentHandler: CommandHandler<
 > = {
   commandType: 'editor.replace_document',
   schema: editorReplaceDocumentHandlerSchema,
-  target: 'timeline',
-  persist: true,
+  persistence: { kind: 'document', target: 'timeline', write: true },
   execute(context, command) {
     const document = context.documents.timeline
       ? invalidateTimelineRenderIfSourceChanged({

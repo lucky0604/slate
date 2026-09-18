@@ -13,16 +13,26 @@ import type {
 } from './executor';
 
 /**
- * Which authoritative project document a command reads and (when `persist`)
- * writes. The persistence layer uses this to load/save the right document
- * instead of hard-coding `canvas.apply` vs everything-else.
+ * Where and how a command is persisted.
+ *
+ * - `document` commands read/write one authoritative project document (Canvas or
+ *   Timeline) under the existing document CAS. `write: false` marks
+ *   read/validate-only commands (e.g. `editor.validate`) that never save a new
+ *   revision.
+ * - `domain` commands are relational: they run against the Slate Story/Scene/
+ *   Shot row tables through a domain service. The command kernel never needs to
+ *   know which table a domain command touches — it only knows this is a
+ *   relational command and dispatches it.
  */
-export type CommandDocumentTarget = 'canvas' | 'timeline';
+export type CommandPersistence =
+  | { kind: 'document'; target: 'canvas' | 'timeline'; write: boolean }
+  | { kind: 'domain' };
 
 /**
  * Runtime execution context handed to a handler. Mirrors the fields the command
  * kernel already threads through persistence: origin, project, command id, and
- * the current authoritative documents the handler may project onto.
+ * the current authoritative documents the handler may project onto. Domain
+ * handlers ignore `documents` (their source of truth is relational rows).
  */
 export type CommandExecutionContext = {
   commandId: string;
@@ -32,13 +42,22 @@ export type CommandExecutionContext = {
 };
 
 /**
- * The pure result a handler produces: which entity ids changed and the data
- * (usually the new canvas/timeline document, plus optional diagnostics) to
- * surface on the command receipt.
+ * The result a handler produces: which entity ids changed and the data to
+ * surface on the command receipt. Document handlers return the new doc;
+ * domain handlers return a small `{ entityType, entityId, revision }` shape.
+ * Domain handlers are async (they touch relational rows); document handlers are
+ * synchronous (pure functions over in-memory documents).
  */
 export type CommandExecutionResult = {
   changedIds: string[];
-  data: BeatDesignCommandData;
+  data: BeatDesignCommandData | DomainHandlerData;
+};
+
+/** The tiny domain write result surfaced on a receipt (Phase 2A). */
+export type DomainHandlerData = {
+  entityType: 'story' | 'scene' | 'shot';
+  entityId: string;
+  revision: number;
 };
 
 /**
@@ -46,29 +65,27 @@ export type CommandExecutionResult = {
  *
  * - `schema` is the command-specific payload schema (always re-validated before
  *   `execute`), so a command type owns the shape of its own payload.
- * - `target` tells the persistence layer which authoritative document this
- *   command is scoped to.
- * - `persist` marks no-op / read-only commands (e.g. `editor.validate`) that
- *   validate but must not write a new revision.
- * - `execute` reuses the existing pure application functions
- *   (`applyCanvasOperations`, `applyEditorOperations`, ...). Handlers are
- *   declarative entry points, not re-implementations.
+ * - `persistence` tells the kernel whether this is a document command (Canvas /
+ *   Timeline with `target` + `write`) or a relational domain command.
+ * - `execute` reuses the existing pure application functions (document) or a
+ *   Slate domain service (domain). Handlers are declarative entry points, not
+ *   re-implementations.
  */
 export type CommandHandler<TSchema extends z.ZodType = z.ZodType> = {
   commandType: string;
   schema: TSchema;
-  target: CommandDocumentTarget;
-  persist: boolean;
+  persistence: CommandPersistence;
   execute: (
     context: CommandExecutionContext,
     payload: z.infer<TSchema>
-  ) => CommandExecutionResult;
+  ) => CommandExecutionResult | Promise<CommandExecutionResult>;
 };
 
 /**
  * The generic envelope a registry dispatcher accepts. `type` is the open
- * extension key: any registered command type (built-in or test-only) may be
- * routed without touching a central switch.
+ * extension key: any registered command type (built-in or new domain type) may
+ * be routed without touching a central switch. The payload is `unknown` at this
+ * boundary; the registered handler owns payload validation via its schema.
  */
 export type DispatchCommandEnvelope = {
   commandId: string;
@@ -142,9 +159,9 @@ export class CommandRegistry {
   }
 
   /**
-   * Dispatch an envelope through the registered handler. This is the single
-   * execution dispatcher — extending the command set never requires editing
-   * this method, only registering a new handler.
+   * Synchronously dispatch a command through a registered document handler.
+   * Domain (relational) commands must be dispatched with {@link executeAsync};
+   * dispatching one here fails deterministically.
    */
   execute(
     envelope: DispatchCommandEnvelope,
@@ -163,6 +180,15 @@ export class CommandRegistry {
         message: `No command handler is registered for command type "${commandType}".`,
       });
     }
+    if (handler.persistence.kind === 'domain') {
+      return createCommandFailure({
+        commandId,
+        projectId,
+        origin,
+        code: 'COMMAND_FAILED',
+        message: `Command type "${commandType}" is a relational domain command and must be dispatched through executeAsync.`,
+      });
+    }
 
     const parsed = handler.schema.safeParse(envelope.command);
     if (!parsed.success) {
@@ -177,8 +203,71 @@ export class CommandRegistry {
     }
 
     try {
+      // Document handlers are synchronous by contract; `executeAsync` handles
+      // the (async) relational domain handlers.
       const executed = handler.execute(
         { commandId, projectId, origin, documents },
+        parsed.data
+      ) as CommandExecutionResult;
+      return createCommandSuccess({
+        commandId,
+        projectId,
+        origin,
+        changedIds: executed.changedIds,
+        data: executed.data as BeatDesignCommandData,
+      });
+    } catch (error) {
+      return mapExecutionError({ error, commandId, projectId, origin });
+    }
+  }
+
+  /**
+   * Async dispatch for relational domain commands. Resolves the registered
+   * handler, validates the payload through `handler.schema`, then awaits the
+   * domain service write. Unknown types and invalid payloads fail the same way
+   * as the synchronous path.
+   */
+  async executeAsync(
+    envelope: DispatchCommandEnvelope
+  ): Promise<BeatDesignCommandResult<DomainHandlerData>> {
+    const { commandId, projectId, origin } = envelope;
+    const commandType = commandTypeOf(envelope);
+
+    const handler = this.handlers.get(commandType);
+    if (!handler) {
+      return createCommandFailure({
+        commandId,
+        projectId,
+        origin,
+        code: 'COMMAND_FAILED',
+        message: `No command handler is registered for command type "${commandType}".`,
+      });
+    }
+    if (handler.persistence.kind !== 'domain') {
+      return createCommandFailure({
+        commandId,
+        projectId,
+        origin,
+        code: 'COMMAND_FAILED',
+        message: `Command type "${commandType}" is a document command; dispatch it synchronously.`,
+      });
+    }
+
+    const parsed = handler.schema.safeParse(envelope.command);
+    if (!parsed.success) {
+      return createCommandFailure({
+        commandId,
+        projectId,
+        origin,
+        code: 'INVALID_COMMAND',
+        message:
+          parsed.error.issues[0]?.message ?? 'Command payload is invalid.',
+      });
+    }
+
+    try {
+      const executed = await handler.execute(
+        { commandId, projectId, origin, documents: {} },
         parsed.data
       );
       return createCommandSuccess({
@@ -186,30 +275,44 @@ export class CommandRegistry {
         projectId,
         origin,
         changedIds: executed.changedIds,
-        data: executed.data,
+        data: executed.data as DomainHandlerData,
       });
     } catch (error) {
-      if (error instanceof BeatDesignCommandError) {
-        return createCommandFailure({
-          commandId,
-          projectId,
-          origin,
-          code: error.code,
-          message: error.message,
-        });
-      }
-      return createCommandFailure({
-        commandId,
-        projectId,
-        origin,
-        code: 'COMMAND_FAILED',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'The command could not be applied.',
-      });
+      return mapExecutionError({ error, commandId, projectId, origin });
     }
   }
+}
+
+function mapExecutionError({
+  error,
+  commandId,
+  projectId,
+  origin,
+}: {
+  error: unknown;
+  commandId: string;
+  projectId: string;
+  origin: BeatDesignCommandOrigin;
+}): BeatDesignCommandResult<never> {
+  if (error instanceof BeatDesignCommandError) {
+    return createCommandFailure({
+      commandId,
+      projectId,
+      origin,
+      code: error.code,
+      message: error.message,
+    });
+  }
+  return createCommandFailure({
+    commandId,
+    projectId,
+    origin,
+    code: 'COMMAND_FAILED',
+    message:
+      error instanceof Error
+        ? error.message
+        : 'The command could not be applied.',
+  });
 }
 
 /** Create an empty registry. Use this for isolated / test registries. */

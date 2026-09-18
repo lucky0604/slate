@@ -351,6 +351,88 @@ export const projectAssetMembership = sqliteTable(
   ]
 );
 
+/**
+ * Slate relational narrative domain (Phase 2A).
+ *
+ * `stories` belong to a project; `scenes` belong to a story; `shots` belong to
+ * a scene. These are Slate's Story / Scene / Shot source of truth — separate
+ * from the Canvas projection and the Timeline assembly. Every row carries a
+ * row-level `revision` used for optimistic concurrency on update.
+ */
+export const story = sqliteTable(
+  'stories',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    premise: text('premise'),
+    revision: integer('revision').notNull().default(1),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
+      .default(sqliteNowMs)
+      .notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .default(sqliteNowMs)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index('stories_project_idx').on(table.projectId),
+    index('stories_project_updated_at_idx').on(table.projectId, table.updatedAt),
+  ]
+);
+
+export const scene = sqliteTable(
+  'scenes',
+  {
+    id: text('id').primaryKey(),
+    storyId: text('story_id')
+      .notNull()
+      .references(() => story.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+    summary: text('summary'),
+    revision: integer('revision').notNull().default(1),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
+      .default(sqliteNowMs)
+      .notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .default(sqliteNowMs)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index('scenes_story_idx').on(table.storyId),
+    index('scenes_story_position_idx').on(table.storyId, table.position),
+  ]
+);
+
+export const shot = sqliteTable(
+  'shots',
+  {
+    id: text('id').primaryKey(),
+    sceneId: text('scene_id')
+      .notNull()
+      .references(() => scene.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    description: text('description').notNull(),
+    durationMs: integer('duration_ms'),
+    revision: integer('revision').notNull().default(1),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
+      .default(sqliteNowMs)
+      .notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .default(sqliteNowMs)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index('shots_scene_idx').on(table.sceneId),
+    index('shots_scene_position_idx').on(table.sceneId, table.position),
+  ]
+);
+
 export type Config = typeof config.$inferSelect;
 export type Project = typeof project.$inferSelect;
 export type NewProject = typeof project.$inferInsert;
@@ -362,3 +444,9 @@ export type Generation = typeof generationHistory.$inferSelect;
 export type NewGeneration = typeof generationHistory.$inferInsert;
 export type GenerationUploadIntent = typeof generationUploadIntent.$inferSelect;
 export type GenerationIntentUpload = typeof generationIntentUpload.$inferSelect;
+export type Story = typeof story.$inferSelect;
+export type NewStory = typeof story.$inferInsert;
+export type Scene = typeof scene.$inferSelect;
+export type NewScene = typeof scene.$inferInsert;
+export type Shot = typeof shot.$inferSelect;
+export type NewShot = typeof shot.$inferInsert;

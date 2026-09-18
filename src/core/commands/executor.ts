@@ -1,6 +1,7 @@
 import { diagnoseTimeline } from '@/core/editor/timeline-diagnostics';
 import type { ProjectSnapshotDocument } from '@/core/projects/project-snapshot';
 import type { TimelineDocument } from '@/core/editor/timeline-document';
+import { domainCommandHandlers } from '@/core/story/commands';
 
 import type {
   CanvasOperation,
@@ -42,6 +43,13 @@ export type BeatDesignCommandData = BeatDesignCommandDocuments & {
 export const commandRegistry: CommandRegistry = createCommandRegistry();
 
 for (const handler of builtInCommandHandlers) {
+  commandRegistry.register(handler);
+}
+
+// Phase 2A: register the Slate Story/Scene/Shot relational domain commands into
+// the same production registry. They are dispatched through the registry's
+// async domain path and never grow the closed `BeatDesignCommand` union.
+for (const handler of domainCommandHandlers) {
   commandRegistry.register(handler);
 }
 

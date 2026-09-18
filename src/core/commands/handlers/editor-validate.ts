@@ -6,7 +6,7 @@ import { editorValidateHandlerSchema } from '../schema';
 
 /**
  * `editor.validate` — a read/validate command. It produces timeline diagnostics
- * without writing a new revision (`persist: false`), so the persistence layer
+ * without writing a new revision (`write: false`), so the persistence layer
  * skips the CAS save for it.
  */
 export const editorValidateHandler: CommandHandler<
@@ -14,8 +14,7 @@ export const editorValidateHandler: CommandHandler<
 > = {
   commandType: 'editor.validate',
   schema: editorValidateHandlerSchema,
-  target: 'timeline',
-  persist: false,
+  persistence: { kind: 'document', target: 'timeline', write: false },
   execute(context, _command) {
     if (!context.documents.timeline) {
       throw new BeatDesignCommandError(

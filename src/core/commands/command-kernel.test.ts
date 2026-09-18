@@ -40,13 +40,16 @@ test('revision conflict failures return the current revision for one-step retrie
   );
 });
 
-test('command request schema rejects unknown commands and unstable editor ids', () => {
+test('command request schema rejects malformed built-in commands but accepts the open domain envelope', () => {
+  // A registered relational domain command passes the thin open envelope; its
+  // handler schema + registry validate it at execution (see domain tests).
   assert.equal(
     uiCommandRequestSchema.safeParse({
-      command: { type: 'editor.erase_everything' },
+      command: { type: 'story.create', title: 'A' },
     }).success,
-    false
+    true
   );
+  // Malformed built-in `editor.apply` commands still fail at the boundary.
   assert.equal(
     uiCommandRequestSchema.safeParse({
       command: {

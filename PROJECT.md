@@ -134,7 +134,13 @@ Phase implementation notes:
 docs/architecture/phase1b-completion-providers.md
 docs/architecture/phase1c-provider-neutral-submission.md
 docs/architecture/phase1d-command-handler-registry.md
+docs/architecture/phase2a-story-scene-shot-domain.md
 ```
+
+> Phase 2A established a relational Story → Scene → Shot domain (the first
+> Slate-owned product Domain), source-of-truth separate from Canvas projection
+> and Timeline assembly, with row-level optimistic revision and six registered
+> domain commands. See the Phase 2A doc above.
 
 Significant future architecture decisions should be recorded using ADRs or architecture docs, not left only in chat logs or commit messages.
 

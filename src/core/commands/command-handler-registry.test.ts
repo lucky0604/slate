@@ -124,6 +124,13 @@ test('all current production command types are registered in the default registr
     'editor.apply',
     'editor.replace_document',
     'editor.validate',
+    // Phase 2A relational domain commands share the same production registry.
+    'scene.create',
+    'scene.update',
+    'shot.create',
+    'shot.update',
+    'story.create',
+    'story.update',
   ]);
   for (const type of commandRegistry.commandTypes) {
     assert.equal(commandRegistry.has(type), true);
@@ -160,8 +167,7 @@ test('duplicate command type registration throws instead of shadowing', () => {
   const handler: CommandHandler = {
     commandType: 'test.noop',
     schema: z.object({ type: z.literal('test.noop') }),
-    target: 'timeline',
-    persist: false,
+    persistence: { kind: 'document', target: 'timeline', write: false },
     execute: () => ({ changedIds: [], data: {} }),
   };
   registry.register(handler);
@@ -182,8 +188,7 @@ test('a test-only command type can be added by registration and executed via the
   const echoHandler: CommandHandler<z.ZodType<{ type: 'test.echo'; message: string }>> = {
     commandType: 'test.echo',
     schema: z.object({ type: z.literal('test.echo'), message: z.string() }),
-    target: 'timeline',
-    persist: false,
+    persistence: { kind: 'document', target: 'timeline', write: false },
     execute(_context, command) {
       captured = command.message;
       return { changedIds: [], data: {} };
@@ -340,8 +345,7 @@ test('registry exposes get/has/resolve and rejects unknown resolve', () => {
   const handler: CommandHandler = {
     commandType: 'test.noop',
     schema: z.object({ type: z.literal('test.noop') }),
-    target: 'timeline',
-    persist: false,
+    persistence: { kind: 'document', target: 'timeline', write: false },
     execute: () => ({ changedIds: [], data: {} }),
   };
   registry.register(handler);
