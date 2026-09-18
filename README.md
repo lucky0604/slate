@@ -1,3 +1,16 @@
+# Slate
+
+> **Status notice** — This repository is **Slate**, an Agent-native filmmaking workspace that is evolving from a BeatDesign fork. It is currently in its **Foundation** phase; formal Drama feature development has not started.
+>
+> See:
+> - `PROJECT.md`
+> - `UPSTREAM.md`
+> - `docs/architecture/`
+>
+> The original BeatDesign documentation below is retained for the current development environment and will be superseded as Slate evolves.
+
+---
+
 <p align="center">
   <img src="./docs/assets/beatdesign-readme-cover-v3.jpg" alt="BeatDesign infinite Canvas and local video Editor" width="100%" />
 </p>

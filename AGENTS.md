@@ -1,3 +1,236 @@
+# Slate Agent Instructions
+
+## Project Identity
+
+This repository is **Slate**.
+
+Slate originated from BeatDesign but is now an independent product.
+
+> The section below ("BeatDesign agent guide") documents the inherited BeatDesign engineering context. Slate-specific directives are above it. Where the two overlap, Slate directives govern product direction; BeatDesign directives govern the inherited codebase's engineering and provider conventions.
+
+## Before Any Significant Work
+
+Before significant work, read at a minimum:
+
+```text
+PROJECT.md
+UPSTREAM.md
+docs/architecture/README.md
+```
+
+When the task touches any of:
+
+```text
+provider
+command
+domain
+canvas
+timeline
+MCP
+agent
+generation
+asset
+```
+
+and `docs/architecture/BEATDESIGN_ARCHITECTURE_AUDIT.md` exists, read it as well.
+
+## General Engineering Rule
+
+Priority order:
+
+```text
+Working
+>
+Evolvable
+>
+Maintainable
+>
+Architecturally Elegant
+```
+
+Do not perform large rewrites for `clean architecture`, `future-proofing`, or `upstream compatibility` without clear benefit.
+
+## Preserve Proven Infrastructure
+
+Unless a task explicitly requires it, do not proactively rewrite:
+
+```text
+media
+export
+asset-first lifecycle
+command persistence
+CAS
+idempotency
+conflict retry
+security utilities
+provider registry
+```
+
+## Slate-owned Architecture
+
+New product capabilities should go into **Slate-owned modules**. Avoid writing Story / Shot / Character / Agent logic directly into:
+
+```text
+Canvas nodes
+Timeline document
+BeatAPI adapter
+React components
+```
+
+## Canvas Rule
+
+```text
+Canvas is a projection / interaction surface.
+Canvas is not the primary business-domain source of truth.
+```
+
+Do not keep stuffing new business fields into the Canvas card schema just because it is convenient for an Agent.
+
+## Timeline Rule
+
+```text
+Timeline is an assembly surface.
+
+Do not store story/domain semantics in Timeline unless strictly necessary for assembly.
+```
+
+## Provider Rule
+
+Any new model capability must avoid leaking `provider-specific assumptions` into the general `Domain` / `Canvas` / `Timeline` / `Command` / `Asset` modules.
+
+## Asset Rule
+
+Generated media should become a project `Asset` before becoming a durable reference in higher-level workflows.
+
+Keep:
+
+```text
+Generation
+→ Asset
+→ Domain / Canvas / Timeline
+```
+
+## Agent Mutation Rule
+
+Long-term direction:
+
+```text
+Agent
+→ Application Command / API
+→ Domain / Core
+→ UI projection
+```
+
+Do not introduce patterns of:
+
+```text
+Agent
+→ React state mutation
+```
+
+## No Premature Drama Implementation
+
+At the current Foundation stage, do not add, without an explicit task:
+
+```text
+Character Bible
+Story Bible
+Director Agent
+Continuity Agent
+Episode system
+Shot UI
+```
+
+Follow the concrete Phase implementation plan instead.
+
+## Upstream Awareness
+
+Before modifying BeatDesign-inherited code:
+
+1. Decide whether it belongs to the `invariant core` or the `diverged Slate surface`.
+2. If `invariant core`: prefer extension, avoid meaningless renames, and keep the diff small.
+3. If the `Slate-owned product surface`: do not sacrifice sound product architecture just to keep upstream merges comfortable.
+
+## Naming
+
+The product name is `Slate`. However, do **not** perform a global internal rename (`BeatDesign → Slate`, `bdesign → slate`) merely for brand consistency, unless there is a dedicated Naming Migration Task.
+
+Existing mature internal names such as `BeatDesignCommand`, `persistBeatDesignCommand`, `bdesign_*` may continue to exist until then, to avoid diffs with no functional meaning.
+
+## Licensing
+
+Must preserve:
+
+```text
+LICENSE
+third_party/
+upstream copyright notices
+```
+
+Do not delete or overwrite BeatDesign / third-party attribution.
+
+## Testing
+
+When modifying core infrastructure, run the project's existing relevant checks:
+
+```text
+typecheck
+unit tests
+i18n checks
+build
+```
+
+Exact commands come from `package.json`. Do not assume commands exist — read the scripts first.
+
+## Scope Discipline
+
+Each task should only solve the current Phase's problem. Do not implement a future Phase just because you noticed a future architectural issue while working.
+
+If you notice extra issues, record them as:
+
+```text
+Follow-up
+Technical Debt
+ADR Candidate
+```
+
+instead of enlarging the current diff.
+
+## Documentation
+
+Significant architecture changes must be reflected in:
+
+```text
+PROJECT.md
+UPSTREAM.md
+docs/architecture/*
+```
+
+Do not let architecture decisions live only in commit messages or agent conversations.
+
+## Stop Conditions
+
+If a task asks for:
+
+```text
+audit
+review
+plan
+design
+```
+
+do not automatically enter implementation.
+
+If a task asks for:
+
+```text
+implementation
+```
+
+do not unilaterally extend into the next Phase.
+
+---
+
 # BeatDesign agent guide
 
 BeatDesign is the independent, open-source Create workspace in the broader BeatAPI ecosystem. It is not the BeatAPI website frontend, the sibling `../BeatAPI SaaS Template`, or a copy of the SaaS product. BeatAPI is the built-in/default remote generation provider; the local workspace must remain useful without a BeatAPI account or API key.
