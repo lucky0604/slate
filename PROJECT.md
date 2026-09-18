@@ -128,6 +128,14 @@ Detailed architecture analysis is governed by:
 docs/architecture/BEATDESIGN_ARCHITECTURE_AUDIT.md
 ```
 
+Phase implementation notes:
+
+```text
+docs/architecture/phase1b-completion-providers.md
+docs/architecture/phase1c-provider-neutral-submission.md
+docs/architecture/phase1d-command-handler-registry.md
+```
+
 Significant future architecture decisions should be recorded using ADRs or architecture docs, not left only in chat logs or commit messages.
 
 If any summary here conflicts with the formal architecture audit or a later ADR, **the formal audit and ADRs take precedence**.

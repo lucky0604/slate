@@ -2,6 +2,7 @@ import {
   BeatApiAdapter,
   validateBeatApiTaskInput,
 } from '@/core/adapters/beatapi-adapter';
+import { OFFICIAL_BEATAPI_MEDIA_HOST } from '@/core/effects/beatapi-media-url';
 import { getConfig } from '@/modules/config/service';
 
 import type { GenerationProviderDefinition } from './contracts';
@@ -41,6 +42,7 @@ export const beatApiGenerationProvider: GenerationProviderDefinition = {
   id: BEATAPI_PROVIDER_ID,
   label: 'BeatAPI',
   supports: ['image', 'video', 'analysis'],
+  mediaHostAllowlist: [OFFICIAL_BEATAPI_MEDIA_HOST],
   modelBindings: BEATAPI_MODEL_BINDINGS.map(
     ([modelId, effectId, uploadPath, imageBucketName]) => ({
       modelId,

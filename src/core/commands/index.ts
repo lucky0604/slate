@@ -4,4 +4,6 @@ export * from './contracts';
 export * from './editor-commands';
 export * from './executor';
 export * from './generation-contract';
+export * from './handlers';
+export * from './registry';
 export * from './schema';

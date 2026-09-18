@@ -25,8 +25,9 @@ import {
   validateGenerationModelInput,
 } from './model-catalog';
 import {
-  getActiveGenerationProvider,
+  getActiveGenerationProviderId,
   getGenerationModelBinding,
+  getGenerationProvider,
 } from './registry';
 import {
   getProviderGenerationAssetUrl,
@@ -146,13 +147,33 @@ async function prepareGenerationReferences({
 
 export async function submitAssetFirstGeneration({
   generation: source,
+  providerId,
   origin,
 }: {
   generation: AssetFirstGenerationRequest | unknown;
+  /**
+   * Explicit provider id. When absent the target is resolved through
+   * ACTIVE_GENERATION_PROVIDER_ID (legacy compatibility), never as the only
+   * identity of an explicit request.
+   */
+  providerId?: string;
   origin: 'ui' | 'mcp' | 'cli' | 'system';
 }) {
   const generation = normalizeAssetFirstGenerationRequest(source);
-  const provider = getActiveGenerationProvider();
+  const explicitProviderId = providerId?.trim() || null;
+  if (explicitProviderId && !getGenerationProvider(explicitProviderId)) {
+    throw new Error(
+      `Generation provider "${explicitProviderId}" is not registered.`
+    );
+  }
+  const provider = getGenerationProvider(
+    explicitProviderId ?? getActiveGenerationProviderId()
+  );
+  if (!provider) {
+    throw new Error(
+      `Generation provider ${explicitProviderId ?? getActiveGenerationProviderId()} is not registered.`
+    );
+  }
   const binding = getGenerationModelBinding({
     modelId: generation.modelId,
     providerId: provider.id,
@@ -162,7 +183,7 @@ export async function submitAssetFirstGeneration({
       `Model ${generation.modelId} is not available from ${provider.label}.`
     );
   }
-  const descriptor = getGenerationModelDescriptor(generation.modelId);
+  const descriptor = getGenerationModelDescriptor(generation.modelId, provider.id);
   if (!descriptor || descriptor.kind !== generation.mode) {
     throw new Error(
       `Model ${generation.modelId} does not support ${generation.mode} generation.`
@@ -202,9 +223,14 @@ export async function submitAssetFirstGeneration({
       generationIntentId: intentId,
       authorizedDeliveryUrls: prepared.authorizedDeliveryUrls,
     });
-    validateGenerationModelInput({ modelId: generation.modelId, input });
+    validateGenerationModelInput({
+      modelId: generation.modelId,
+      input,
+      providerId: provider.id,
+    });
     const result = await submitEffectGeneration({
-      effectId: binding.effectId,
+      providerId: provider.id,
+      modelId: generation.modelId,
       input,
       projectId: generation.projectId,
       generationIntentId: intentId,
@@ -213,6 +239,9 @@ export async function submitAssetFirstGeneration({
         origin,
         requestVersion: generation.version,
         logicalModelId: generation.modelId,
+        ...(explicitProviderId
+          ? { explicitProviderId }
+          : { fromLegacyActiveProvider: true }),
       },
     });
     const generationId =

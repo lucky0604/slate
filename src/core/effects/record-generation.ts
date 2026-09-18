@@ -23,6 +23,8 @@ const extractPrompt = (input: unknown) => {
 export async function recordGeneration({
   projectId,
   effectId,
+  providerId,
+  modelId,
   status,
   input,
   output,
@@ -30,6 +32,10 @@ export async function recordGeneration({
 }: {
   projectId?: string | null;
   effectId: number;
+  /** Provider-neutral history identity. Provider that executed the generation. */
+  providerId?: string | null;
+  /** Provider-neutral history identity. Slate logical model id. */
+  modelId?: string | null;
   status: GenerationStatus;
   input?: unknown;
   output?: unknown;
@@ -44,6 +50,8 @@ export async function recordGeneration({
       id,
       projectId: projectId ?? null,
       effectId,
+      providerId: providerId ?? null,
+      modelId: modelId ?? null,
       status,
       providerTaskId: operational.providerTaskId ?? null,
       lifecyclePhase: operational.lifecyclePhase ?? null,

@@ -2,6 +2,7 @@ import { createAdapter } from '@/core/adapters/adapter-factory';
 import { getEffectById } from '@/core/effects/effects';
 import { resolveProviderSyncTransition } from '@/core/effects/generation-orchestrator';
 import { persistEffectOutputIfNeeded } from '@/core/effects/output-storage';
+import { resolveGenerationProvenance } from '@/core/effects/generation-provenance';
 import {
   getGenerationById,
   updateGenerationById,
@@ -9,9 +10,6 @@ import {
 
 const asObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-
-const readString = (value: unknown) =>
-  typeof value === 'string' && value.trim() ? value.trim() : null;
 
 export async function syncGeneration({
   wmTaskId,
@@ -25,11 +23,20 @@ export async function syncGeneration({
   if (generation.status === 'succeeded' || generation.status === 'failed') {
     return { ok: true as const, generation };
   }
-  const providerIdentity = asObject(asObject(generation.input)._provider);
-  const effect = await getEffectById(
-    effectId,
-    readString(providerIdentity.id) ?? undefined
-  );
+  const provenance = resolveGenerationProvenance({
+    providerId: generation.providerId,
+    modelId: generation.modelId,
+    input: generation.input,
+  });
+  if (!provenance.providerId) {
+    return {
+      ok: false as const,
+      status: 409,
+      error:
+        'Generation provider provenance is missing; synchronization cannot be resolved safely.',
+    };
+  }
+  const effect = await getEffectById(effectId, provenance.providerId);
   if (!effect) return { ok: false as const, status: 404, error: 'Model not found' };
   if (!generation.providerTaskId) {
     return { ok: true as const, generation };
@@ -53,6 +60,7 @@ export async function syncGeneration({
         wmTaskId,
         effectId,
         effectType: effect.type,
+        providerId: effect.provider,
       })
     : transition.output;
   await updateGenerationById({

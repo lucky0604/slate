@@ -65,6 +65,41 @@ export const isPublicHttpMediaUrl = (value: string) => {
   }
 };
 
+/**
+ * Generic per-provider media output allowlist check used by output-storage.
+ *
+ * A provider's `mediaHostAllowlist` names the exact hosts it is trusted to
+ * return generated media from. The URL must still be a public HTTPS URL and
+ * pass the shared SSRF/private-host guards. Exact `URL.hostname` matching only
+ * — substrings are never used, so `media.beatapi.io.attacker.com` or
+ * `evilmedia.beatapi.io` cannot slip through. An empty/undefined allowlist
+ * rejects everything (default-deny).
+ */
+export const isUrlAllowedForMediaOutput = (
+  value: string,
+  allowlist: readonly string[] | undefined
+): boolean => {
+  if (!allowlist || allowlist.length === 0) return false;
+  if (!isPublicHttpMediaUrl(value)) return false;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:' ||
+      url.port !== '' ||
+      url.username ||
+      url.password
+    ) {
+      return false;
+    }
+    const hostname = url.hostname.toLowerCase();
+    return allowlist.some(
+      (allowed) => allowed.toLowerCase() === hostname
+    );
+  } catch {
+    return false;
+  }
+};
+
 export const isOfficialBeatApiMediaUrl = (value: string) => {
   try {
     const url = new URL(value);

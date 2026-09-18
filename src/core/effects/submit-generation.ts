@@ -1,8 +1,15 @@
+import type { EffectRecord } from '@/core/adapters/base-adapter';
 import { createAdapter } from '@/core/adapters/adapter-factory';
 import { getEffectById } from '@/core/effects/effects';
 import { getWorkspaceEffectRegistryEntryByEffectId } from '@/core/effects/effect-registry';
 import { VIDEO_ANALYSIS_MODEL_ID } from '@/core/effects/video-analysis';
-import { getGenerationModelBindingByEffectId } from '@/core/generation-providers';
+import {
+  getActiveGenerationProviderId,
+  getGenerationModelBinding,
+  getGenerationModelBindingByEffectId,
+  getGenerationProvider,
+  type GenerationProviderModelBinding,
+} from '@/core/generation-providers';
 import {
   resolveGenerationSubmitTransition,
   resolveProviderTaskId,
@@ -45,7 +52,20 @@ export type SubmitEffectGenerationResult = {
 };
 
 export type SubmitEffectGenerationInput = {
-  effectId: number;
+  /**
+   * Legacy numeric provider effect reference. Kept for BeatAPI-compatible
+   * submissions. Provider-neutral submissions may omit `effectId` and pass
+   * `providerId` + `modelId` instead.
+   */
+  effectId?: number;
+  /**
+   * Explicit provider id. When absent, the target is resolved through
+   * ACTIVE_GENERATION_PROVIDER_ID as legacy compatibility (tagged in the
+   * recorded `_provider` provenance so history can recover the real provider).
+   */
+  providerId?: string | null;
+  /** Explicit logical model id (provider-neutral). Requires `providerId`. */
+  modelId?: string;
   input?: unknown;
   projectId?: string | null;
   generationIntentId?: string | null;
@@ -53,6 +73,34 @@ export type SubmitEffectGenerationInput = {
   metadata?: Record<string, unknown>;
   authorizedReferenceUrls?: string[];
 };
+
+/**
+ * Resolved, provider-neutral identity for one generation submission.
+ *
+ * Exactly one explicit identity channel —
+ * `providerId + modelId` (preferred) or `effectId` (legacy) — is normalized
+ * into this shape. All downstream code (intents, effect/adapter resolution,
+ * provenance, output persistence) uses only `providerId` + `modelId` +
+ * `binding`; it never re-derives the provider from the active provider.
+ */
+export type GenerationSubmissionTarget = {
+  providerId: string;
+  modelId: string;
+  upstreamModelId: string;
+  effectId: number;
+  effect: EffectRecord;
+  binding: GenerationProviderModelBinding;
+  /**
+   * True when this target was resolved through ACTIVE_GENERATION_PROVIDER_ID
+   * because the request did not carry an explicit providerId. This is the
+   * legacy compatibility boundary, not the primary submission identity.
+   */
+  fromLegacyActiveProvider: boolean;
+};
+
+type TargetResolution =
+  | { ok: true; target: GenerationSubmissionTarget }
+  | { ok: false; status: number; error: string };
 
 const asObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -124,8 +172,120 @@ async function linkInputAssets(
   }
 }
 
-export async function submitEffectGeneration({
+/**
+ * Resolve a submission to exactly one (provider, logical model) target.
+ *
+ * Identity is explicit: `providerId + modelId` is the provider-neutral shape.
+ * `effectId` remains the legacy BeatAPI-compatible channel. When no
+ * `providerId` is supplied, the target is resolved through the active provider
+ * — that is legitimate *legacy compatibility*, never the sole identity of an
+ * explicit request. The legacy fallback is confined to this boundary and is
+ * carried forward in the target so history records the true provider.
+ */
+async function resolveGenerationSubmissionTarget({
+  providerId,
   effectId,
+  modelId,
+}: {
+  providerId?: string | null;
+  effectId?: number;
+  modelId?: string;
+}): Promise<TargetResolution> {
+  const explicitProviderId = providerId?.trim() || null;
+
+  if (explicitProviderId && !getGenerationProvider(explicitProviderId)) {
+    return {
+      ok: false,
+      status: 422,
+      error: `Generation provider "${explicitProviderId}" is not registered.`,
+    };
+  }
+
+  // Provider-scoped resolution. Explicit requests scope to the requested
+  // provider; legacy requests scope to the active provider.
+  const scope = explicitProviderId ?? getActiveGenerationProviderId();
+  const provider = getGenerationProvider(scope);
+  if (!provider) {
+    return {
+      ok: false,
+      status: 422,
+      error: `Generation provider "${scope}" is not registered.`,
+    };
+  }
+  const fromLegacyActiveProvider = !explicitProviderId;
+
+  const normalizedModelId = modelId?.trim() || null;
+  const hasEffectId = Number.isFinite(effectId);
+
+  // Preferred neutral identity: providerId + modelId.
+  let resolvedEffectId: number | null = null;
+  if (normalizedModelId) {
+    const binding = getGenerationModelBinding({
+      modelId: normalizedModelId,
+      providerId: scope,
+    });
+    if (!binding) {
+      return {
+        ok: false,
+        status: 404,
+        error: explicitProviderId
+          ? `Model "${normalizedModelId}" is not available from provider "${explicitProviderId}".`
+          : `Model "${normalizedModelId}" is not available from the active provider.`,
+      };
+    }
+    resolvedEffectId = binding.effectId;
+  } else if (hasEffectId) {
+    resolvedEffectId = effectId as number;
+  } else {
+    return {
+      ok: false,
+      status: 400,
+      error: 'providerId + modelId (or legacy effectId) is required.',
+    };
+  }
+
+  // Resolve the effect and confirm the model binding inside the chosen
+  // provider. Never falls back to a different provider's binding.
+  const binding = getGenerationModelBindingByEffectId({
+    effectId: resolvedEffectId,
+    providerId: scope,
+  });
+  if (!binding) {
+    return { ok: false, status: 404, error: 'Model not found' };
+  }
+  const effect = await getEffectById(resolvedEffectId, scope);
+  if (
+    !effect ||
+    (!getWorkspaceEffectRegistryEntryByEffectId(
+      resolvedEffectId,
+      scope
+    ) &&
+      binding.modelId !== VIDEO_ANALYSIS_MODEL_ID)
+  ) {
+    return { ok: false, status: 404, error: 'Model not found' };
+  }
+  if (effect.type !== 1 && effect.type !== 2 && effect.type !== 3) {
+    return { ok: false, status: 400, error: 'Unsupported task type.' };
+  }
+
+  return {
+    ok: true,
+    target: {
+      providerId: scope,
+      modelId: binding.modelId,
+      upstreamModelId: binding.upstreamModelId,
+      effectId: resolvedEffectId,
+      effect,
+      binding,
+      fromLegacyActiveProvider,
+    },
+  };
+}
+
+export async function submitEffectGeneration({
+  providerId,
+  modelId,
+  effectId: requestedEffectId,
   input,
   projectId,
   generationIntentId,
@@ -133,27 +293,17 @@ export async function submitEffectGeneration({
   metadata,
   authorizedReferenceUrls = [],
 }: SubmitEffectGenerationInput): Promise<SubmitEffectGenerationResult> {
-  if (!Number.isFinite(effectId)) {
-    return { status: 400, body: { error: 'effectId is required' } };
+  const resolution = await resolveGenerationSubmissionTarget({
+    providerId,
+    effectId: requestedEffectId,
+    modelId,
+  });
+  if (!resolution.ok) {
+    return { status: resolution.status, body: { error: resolution.error } };
   }
-  const effect = await getEffectById(effectId);
-  const binding = effect
-    ? getGenerationModelBindingByEffectId({
-        effectId,
-        providerId: effect.provider,
-      })
-    : null;
-  if (
-    !effect ||
-    !binding ||
-    (!getWorkspaceEffectRegistryEntryByEffectId(effectId, effect.provider) &&
-      binding.modelId !== VIDEO_ANALYSIS_MODEL_ID)
-  ) {
-    return { status: 404, body: { error: 'Model not found' } };
-  }
-  if (effect.type !== 1 && effect.type !== 2 && effect.type !== 3) {
-    return { status: 400, body: { error: 'Unsupported task type.' } };
-  }
+  const target = resolution.target;
+  const { effectId: normalizedEffectId } = target;
+  const effect = target.effect;
 
   const normalizedProjectId = projectId?.trim() || null;
   if (requireProject && !normalizedProjectId) {
@@ -197,10 +347,15 @@ export async function submitEffectGeneration({
     ...adapterInput,
     ...(metadata ? { _source: metadata } : {}),
     _provider: {
-      id: effect.provider,
-      modelId: binding?.modelId ?? effect.model,
-      upstreamModelId: effect.model,
-      effectId,
+      id: target.providerId,
+      modelId: target.modelId,
+      upstreamModelId: target.upstreamModelId,
+      effectId: normalizedEffectId,
+      // Only present on legacy requests: signals the provider came from
+      // ACTIVE_GENERATION_PROVIDER_ID and not an explicit request identity.
+      ...(target.fromLegacyActiveProvider
+        ? { fromLegacyActiveProvider: true }
+        : {}),
     },
   };
   const admission = await withGenerationSubmissionLock<
@@ -242,7 +397,7 @@ export async function submitEffectGeneration({
     let intent = await consumeGenerationUploadIntent({
       intentId: admittedIntentId,
       projectId: normalizedProjectId,
-      effectId,
+      effectId: normalizedEffectId,
       referencedUrls,
       authorizedProjectUrls,
     });
@@ -251,7 +406,7 @@ export async function submitEffectGeneration({
       : await getGenerationUploadIntentAdmissionState({
           intentId: admittedIntentId,
           projectId: normalizedProjectId,
-          effectId,
+          effectId: normalizedEffectId,
         });
     if (
       !intent &&
@@ -261,13 +416,13 @@ export async function submitEffectGeneration({
       await failGenerationUploadIntent({ intentId: admittedIntentId });
       admittedIntentId = await issueGenerationUploadIntent({
         projectId: normalizedProjectId,
-        effectId,
+        effectId: normalizedEffectId,
         expectedUploadCount: 0,
       });
       intent = await consumeGenerationUploadIntent({
         intentId: admittedIntentId,
         projectId: normalizedProjectId,
-        effectId,
+        effectId: normalizedEffectId,
         referencedUrls,
         authorizedProjectUrls,
       });
@@ -276,7 +431,7 @@ export async function submitEffectGeneration({
         : await getGenerationUploadIntentAdmissionState({
             intentId: admittedIntentId,
             projectId: normalizedProjectId,
-            effectId,
+            effectId: normalizedEffectId,
           });
     }
     if (!intent) {
@@ -320,7 +475,9 @@ export async function submitEffectGeneration({
 
     const generationId = await recordGeneration({
       projectId: normalizedProjectId,
-      effectId,
+      effectId: normalizedEffectId,
+      providerId: target.providerId,
+      modelId: target.modelId,
       status: 'pending',
       input: recordedInput,
     });
@@ -354,8 +511,9 @@ export async function submitEffectGeneration({
         ? await persistEffectOutputIfNeeded({
             output: transition.output,
             wmTaskId: generationId,
-            effectId,
+            effectId: normalizedEffectId,
             effectType: effect.type,
+            providerId: target.providerId,
           })
         : transition.output;
     if (result.status === 'failed') {
@@ -373,7 +531,10 @@ export async function submitEffectGeneration({
       error: transition.error,
     });
     if (transition.publicStatus === 'pending' || transition.publicStatus === 'processing') {
-      startBackendPollingForGeneration({ wmTaskId: generationId, effectId });
+      startBackendPollingForGeneration({
+        wmTaskId: generationId,
+        effectId: normalizedEffectId,
+      });
     }
     return {
       status: 200,

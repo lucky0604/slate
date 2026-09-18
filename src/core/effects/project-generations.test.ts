@@ -13,6 +13,8 @@ test('maps a stored generation onto the studio feed card', () => {
     status: 'succeeded',
     submittedPrompt: 'A quiet coastal village',
     effectId: 1,
+    providerId: 'beatapi',
+    modelId: 'veo-3.1',
     input: {
       model: 'veo-3.1',
       mode: 'fast',
@@ -43,6 +45,8 @@ test('maps video analysis text, depth, and source video onto the studio feed', (
     status: 'succeeded',
     submittedPrompt: 'Find continuity issues',
     effectId: VIDEO_ANALYSIS_EFFECT_ID,
+    providerId: 'beatapi',
+    modelId: 'video-analysis',
     input: {
       video_url: 'https://media.beatapi.io/inputs/review.mp4',
       analysis_depth: 'deep',
@@ -68,6 +72,8 @@ test('keeps the latest limited generations in chronological feed order', () => {
     status: 'succeeded',
     submittedPrompt: null,
     effectId: 1,
+    providerId: null,
+    modelId: null,
     input: {},
     output: null,
     error: null,
@@ -80,4 +86,42 @@ test('keeps the latest limited generations in chronological feed order', () => {
   ]);
 
   assert.deepEqual(items.map((item) => item.id), ['older', 'newest']);
+});
+
+test('does not infer legacy identity from the active provider when provenance is absent', () => {
+  const item = toProjectGenerationItem({
+    id: 'legacy-1',
+    status: 'succeeded',
+    submittedPrompt: null,
+    effectId: 1,
+    providerId: null,
+    modelId: null,
+    input: { model: 'veo-3.1' },
+    output: null,
+    error: null,
+    createdAt: '2026-08-23T03:00:00.000Z',
+  });
+
+  assert.equal(item.modelId, null);
+  assert.equal(item.modelName, null);
+});
+
+test('prefers durable history identity over embedded provenance', () => {
+  const item = toProjectGenerationItem({
+    id: 'provider-precedence-1',
+    status: 'succeeded',
+    submittedPrompt: null,
+    effectId: 1,
+    providerId: 'beatapi',
+    modelId: 'veo-3.1',
+    input: {
+      _provider: { id: 'other-provider', modelId: 'gpt-image-2' },
+    },
+    output: null,
+    error: null,
+    createdAt: '2026-08-23T03:00:00.000Z',
+  });
+
+  assert.equal(item.modelId, 'veo-3.1');
+  assert.equal(item.modelName, 'Veo 3.1');
 });

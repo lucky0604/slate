@@ -18,6 +18,7 @@ import {
   type BeatDesignCommandResult,
 } from './contracts';
 import {
+  commandRegistry,
   executeBeatDesignCommand,
   type BeatDesignCommand,
   type BeatDesignCommandData,
@@ -221,8 +222,22 @@ async function persistBeatDesignCommandOnce({
       command: normalizedCommand,
     };
 
+    // Route document load/save by the registered handler's declared target and
+    // persist flag, so adding a command type only requires a handler — not a
+    // growing central `if (type === ...)` dispatcher.
+    const handler = commandRegistry.get(normalizedCommand.type);
+    if (!handler) {
+      return createCommandFailure({
+        commandId,
+        projectId,
+        origin,
+        code: 'COMMAND_FAILED',
+        message: `No command handler is registered for command type "${normalizedCommand.type}".`,
+      });
+    }
+
     let result: BeatDesignCommandResult<BeatDesignCommandData>;
-    if (normalizedCommand.type === 'canvas.apply') {
+    if (handler.target === 'canvas') {
       const state = await loadProjectWithLatestSnapshot({ projectId });
       if (!state) {
         return createCommandFailure({
@@ -254,7 +269,7 @@ async function persistBeatDesignCommandOnce({
         documents: { timeline: timeline?.document ?? null },
       });
       if (!executed.ok) return executed;
-      if (normalizedCommand.type === 'editor.validate') {
+      if (!handler.persist) {
         return { ...executed, revision: timeline?.version };
       }
       if (!executed.data.timeline) return executed;

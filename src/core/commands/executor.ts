@@ -1,26 +1,23 @@
 import { diagnoseTimeline } from '@/core/editor/timeline-diagnostics';
-import {
-  createTimelineDocument,
-  type TimelineDocument,
-} from '@/core/editor/timeline-document';
 import type { ProjectSnapshotDocument } from '@/core/projects/project-snapshot';
+import type { TimelineDocument } from '@/core/editor/timeline-document';
 
-import {
-  applyCanvasOperations,
-  type CanvasOperation,
+import type {
+  CanvasOperation,
 } from './canvas-commands';
-import {
-  applyEditorOperations,
-  invalidateTimelineRenderIfSourceChanged,
-  type EditorOperation,
+import type {
+  EditorOperation,
 } from './editor-commands';
-import {
-  BeatDesignCommandError,
-  createCommandFailure,
-  createCommandSuccess,
-  type BeatDesignCommandEnvelope,
-  type BeatDesignCommandResult,
+import type {
+  BeatDesignCommandEnvelope,
+  BeatDesignCommandResult,
 } from './contracts';
+import { builtInCommandHandlers } from './handlers';
+import {
+  createCommandRegistry,
+  type CommandHandler,
+  type CommandRegistry,
+} from './registry';
 
 export type BeatDesignCommand =
   | { type: 'canvas.apply'; operations: CanvasOperation[] }
@@ -37,6 +34,23 @@ export type BeatDesignCommandData = BeatDesignCommandDocuments & {
   diagnostics?: ReturnType<typeof diagnoseTimeline>;
 };
 
+/**
+ * The application-level command handler registry, pre-populated with the current
+ * production commands. Command execution is dispatched through this registry;
+ * the executor never switches on a growing closed union.
+ */
+export const commandRegistry: CommandRegistry = createCommandRegistry();
+
+for (const handler of builtInCommandHandlers) {
+  commandRegistry.register(handler);
+}
+
+/**
+ * Execute a command through its registered handler. Unknown command types fail
+ * through the registry with a predictable error. The `BeatDesignCommand` union
+ * remains as a compatibility/type surface; new command types are added by
+ * registering a handler, not by extending the union or this function.
+ */
 export function executeBeatDesignCommand({
   envelope,
   documents,
@@ -44,92 +58,8 @@ export function executeBeatDesignCommand({
   envelope: BeatDesignCommandEnvelope<BeatDesignCommand>;
   documents: BeatDesignCommandDocuments;
 }): BeatDesignCommandResult<BeatDesignCommandData> {
-  const { commandId, projectId, origin, command } = envelope;
-
-  try {
-    if (command.type === 'canvas.apply') {
-      if (!documents.canvas) {
-        throw new BeatDesignCommandError(
-          'NOT_FOUND',
-          'Canvas document was not found.'
-        );
-      }
-      const applied = applyCanvasOperations(documents.canvas, command.operations);
-      return createCommandSuccess({
-        commandId,
-        projectId,
-        origin,
-        changedIds: applied.changedIds,
-        data: { canvas: applied.document },
-      });
-    }
-
-    if (command.type === 'editor.apply') {
-      const source =
-        documents.timeline ??
-        createTimelineDocument({
-          projectId,
-          name: 'Timeline 1',
-        });
-      const applied = applyEditorOperations(source, command.operations);
-      return createCommandSuccess({
-        commandId,
-        projectId,
-        origin,
-        changedIds: applied.changedIds,
-        data: { timeline: applied.document },
-      });
-    }
-
-    if (command.type === 'editor.replace_document') {
-      const document = documents.timeline
-        ? invalidateTimelineRenderIfSourceChanged({
-            previous: documents.timeline,
-            next: command.document,
-          })
-        : command.document;
-      return createCommandSuccess({
-        commandId,
-        projectId,
-        origin,
-        changedIds: [document.id],
-        data: { timeline: document },
-      });
-    }
-
-    if (!documents.timeline) {
-      throw new BeatDesignCommandError(
-        'NOT_FOUND',
-        'Timeline document was not found.'
-      );
-    }
-    return createCommandSuccess({
-      commandId,
-      projectId,
-      origin,
-      changedIds: [documents.timeline.id],
-      data: {
-        timeline: documents.timeline,
-        diagnostics: diagnoseTimeline(documents.timeline),
-      },
-    });
-  } catch (error) {
-    if (error instanceof BeatDesignCommandError) {
-      return createCommandFailure({
-        commandId,
-        projectId,
-        origin,
-        code: error.code,
-        message: error.message,
-      });
-    }
-    return createCommandFailure({
-      commandId,
-      projectId,
-      origin,
-      code: 'COMMAND_FAILED',
-      message:
-        error instanceof Error ? error.message : 'The command could not be applied.',
-    });
-  }
+  return commandRegistry.execute(envelope, documents);
 }
+
+export type { CommandHandler, CommandRegistry };
+export { createCommandRegistry } from './registry';

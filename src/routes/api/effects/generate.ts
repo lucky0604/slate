@@ -14,6 +14,13 @@ import {
 
 type GenerateRequest = {
   effectId?: number;
+  /**
+   * Explicit generation provider id (provider-neutral). When absent, the
+   * submission falls back to ACTIVE_GENERATION_PROVIDER_ID (legacy compat).
+   */
+  providerId?: string;
+  /** Explicit logical model id, used with providerId (provider-neutral). */
+  modelId?: string;
   input?: unknown;
   projectId?: string;
   generationIntentToken?: string;
@@ -74,7 +81,9 @@ async function POST({ request }: { request: Request }) {
     }
   }
   const result = await submitEffectGeneration({
-    effectId: payload.effectId ?? Number.NaN,
+    effectId: payload.effectId,
+    providerId: payload.providerId,
+    modelId: payload.modelId,
     input: authoritativeInput,
     projectId: payload.projectId,
     generationIntentId: payload.generationIntentToken,

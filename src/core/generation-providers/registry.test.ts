@@ -6,6 +6,7 @@ import {
   getActiveGenerationProvider,
   getGenerationModelBinding,
   getGenerationModelDescriptor,
+  getGenerationProvider,
   listGenerationModelDescriptors,
 } from './index';
 
@@ -16,6 +17,12 @@ test('BeatAPI is the default provider behind stable logical model ids', () => {
   assert.equal(provider.id, 'beatapi');
   assert.equal(binding?.effectId, 9);
   assert.equal(binding?.upstreamModelId, 'seedance-2');
+});
+
+test('BeatAPI declares its own trusted media host allowlist', () => {
+  const provider = getGenerationProvider('beatapi');
+  assert.ok(provider);
+  assert.deepEqual(provider.mediaHostAllowlist, ['media.beatapi.io']);
 });
 
 test('model discovery exposes parameters and references without upstream URLs', () => {

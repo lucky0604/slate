@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { isUrlAllowedForMediaOutput } from './beatapi-media-url';
+import { getGenerationProvider } from '@/core/generation-providers';
+
 import {
   buildOutputStoragePlan,
   shouldRetryOutputStorageSync,
@@ -51,5 +54,49 @@ test('stores video covers as thumbnails without replacing the main output asset'
         role: 'thumbnail',
       },
     ]
+  );
+});
+
+test('output storage gates media by the generation provider allowlist, not a global BeatAPI host', () => {
+  const beatApiAllowlist = getGenerationProvider('beatapi')?.mediaHostAllowlist ?? [];
+
+  // BeatAPI keeps its existing behavior: official media host still passes.
+  assert.ok(beatApiAllowlist.includes('media.beatapi.io'));
+  assert.equal(
+    isUrlAllowedForMediaOutput(
+      'https://media.beatapi.io/outputs/task-1/result.mp4',
+      beatApiAllowlist
+    ),
+    true
+  );
+
+  // A non-BeatAPI public host is not silently allowed for BeatAPI.
+  assert.equal(
+    isUrlAllowedForMediaOutput('https://example.com/video.mp4', beatApiAllowlist),
+    false
+  );
+
+  // Provider isolation: a second provider can allow its own media host.
+  const testProviderAllowlist = ['media.example.test'];
+  assert.equal(
+    isUrlAllowedForMediaOutput(
+      'https://media.example.test/output.mp4',
+      testProviderAllowlist
+    ),
+    true
+  );
+  // …but that provider cannot use the BeatAPI host unless it explicitly allows it.
+  assert.equal(
+    isUrlAllowedForMediaOutput(
+      'https://media.beatapi.io/x.mp4',
+      testProviderAllowlist
+    ),
+    false
+  );
+
+  // Default-deny: no declared allowlist allows remote generated media.
+  assert.equal(
+    isUrlAllowedForMediaOutput('https://media.beatapi.io/x.mp4', []),
+    false
   );
 });

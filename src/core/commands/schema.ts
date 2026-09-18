@@ -1,9 +1,14 @@
 import { z } from 'zod';
 
 import type { CanvasCard } from '@/core/beatcanvas/canvas-types';
-import { normalizeTimelineDocument } from '@/core/editor/timeline-document';
+import {
+  normalizeTimelineDocument,
+  type TimelineDocument,
+} from '@/core/editor/timeline-document';
 
+import type { CanvasOperation } from './canvas-commands';
 import { repairCanvasCardInput } from './canvas-card-repair';
+import type { EditorOperation } from './editor-commands';
 import type { BeatDesignCommand } from './executor';
 
 const commandIdSchema = z.string().trim().min(1).max(200);
@@ -427,27 +432,92 @@ export const editorOperationSchema = z.discriminatedUnion('type', [
     .strict(),
 ]);
 
+/**
+ * Command-specific payload schemas. Each handler registry entry owns one of
+ * these, so a command type validates its own payload instead of relying solely
+ * on a growing central union.
+ */
+export const canvasApplyCommandSchema = z
+  .object({
+    type: z.literal('canvas.apply'),
+    operations: z.array(canvasOperationSchema).min(1).max(500),
+  })
+  .strict();
+
+export const editorApplyCommandSchema = z
+  .object({
+    type: z.literal('editor.apply'),
+    operations: z.array(editorOperationSchema).min(1).max(500),
+  })
+  .strict();
+
+export const editorReplaceDocumentCommandSchema = z
+  .object({
+    type: z.literal('editor.replace_document'),
+    document: timelineDocumentSchema,
+  })
+  .strict();
+
+export const editorValidateCommandSchema = z
+  .object({ type: z.literal('editor.validate') })
+  .strict();
+
+/**
+ * Handler schemas describe the payload a handler consumes — the internal
+ * command shapes passed by the pure functions (`CanvasOperation` /
+ * `EditorOperation`). These are deliberately as permissive as the executable
+ * types: semantic invariants (e.g. whether a clip exists) are enforced by the
+ * existing application functions (`applyEditorOperations`, …), while the strict
+ * transport union above remains the authoritative wire contract for UI/MCP.
+ */
+export type EditorApplyCommand = {
+  type: 'editor.apply';
+  operations: EditorOperation[];
+};
+
+export type CanvasApplyCommand = {
+  type: 'canvas.apply';
+  operations: CanvasOperation[];
+};
+
+export type EditorReplaceDocumentCommand = {
+  type: 'editor.replace_document';
+  document: TimelineDocument;
+};
+
+export const canvasApplyHandlerSchema: z.ZodType<CanvasApplyCommand> =
+  canvasApplyCommandSchema;
+
+/**
+ * `editor.apply` operations are looser than the strict transport schema: the
+ * internal `EditorOperation` type allows implied ids (e.g. `clipId`, take ids)
+ * that the pure `applyEditorOperations` tolerates. The transport union above
+ * stays strict for UI/MCP; this handler schema matches what the pure function
+ * accepts.
+ */
+export const editorApplyHandlerSchema: z.ZodType<EditorApplyCommand> = z
+  .object({
+    type: z.literal('editor.apply'),
+    operations: z.array(z.any()).min(1).max(500),
+  })
+  .strict();
+
+export const editorReplaceDocumentHandlerSchema: z.ZodType<EditorReplaceDocumentCommand> =
+  editorReplaceDocumentCommandSchema;
+
+export const editorValidateHandlerSchema = editorValidateCommandSchema;
+
+/**
+ * Transport/application union used by UI and MCP to validate a full command
+ * object at the boundary. It stays as a compatibility/type surface; command
+ * execution is dispatched through the handler registry.
+ */
 export const beatDesignCommandSchema: z.ZodType<BeatDesignCommand> =
   z.discriminatedUnion('type', [
-    z
-      .object({
-        type: z.literal('canvas.apply'),
-        operations: z.array(canvasOperationSchema).min(1).max(500),
-      })
-      .strict(),
-    z
-      .object({
-        type: z.literal('editor.apply'),
-        operations: z.array(editorOperationSchema).min(1).max(500),
-      })
-      .strict(),
-    z
-      .object({
-        type: z.literal('editor.replace_document'),
-        document: timelineDocumentSchema,
-      })
-      .strict(),
-    z.object({ type: z.literal('editor.validate') }).strict(),
+    canvasApplyCommandSchema,
+    editorApplyCommandSchema,
+    editorReplaceDocumentCommandSchema,
+    editorValidateCommandSchema,
   ]);
 
 const commandRequestBaseSchema = z

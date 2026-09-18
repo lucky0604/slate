@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 
 import { resolveOutputMedia } from './output-media';
-import { isOfficialBeatApiMediaUrl } from './beatapi-media-url';
+import { isUrlAllowedForMediaOutput } from './beatapi-media-url';
 import { getGenerationById } from './record-generation';
+import { getGenerationProvider } from '@/core/generation-providers';
 import {
   LOCAL_PROJECT_ASSET_BUCKET,
   LOCAL_PROJECT_ASSET_PROVIDER,
@@ -114,11 +115,14 @@ export async function persistEffectOutputIfNeeded({
   wmTaskId,
   effectId,
   effectType,
+  providerId,
 }: {
   output: unknown;
   wmTaskId: string;
   effectId: number;
   effectType: number;
+  /** Generation provider that produced `output`. Used to resolve its media host allowlist. */
+  providerId: string;
 }) {
   const storagePlan = buildOutputStoragePlan({ output, effectType });
   if (storagePlan.length === 0) return output;
@@ -133,13 +137,25 @@ export async function persistEffectOutputIfNeeded({
     throw new Error('Generated media cannot be saved without a project');
   }
 
+  // Default-deny: only URLs matching the provider-declared allowlist (and their
+  // generic SSRF/public-URL guards) may be persisted. No allowlist means a
+  // provider is not yet trusted to return remote generated media.
+  const provider = getGenerationProvider(providerId);
+  const mediaHostAllowlist = provider?.mediaHostAllowlist ?? [];
+  if (
+    providerEntries.some(
+      ({ url }) => !isUrlAllowedForMediaOutput(url, mediaHostAllowlist)
+    )
+  ) {
+    throw new Error(
+      'Generated media URL is not approved by the generation provider'
+    );
+  }
+
   const assetIds: string[] = [];
   const localUrlByProviderUrl = new Map<string, string>();
 
   for (const { url, type, role } of providerEntries) {
-    if (!isOfficialBeatApiMediaUrl(url)) {
-      throw new Error('Generated media URL is not an approved BeatAPI asset');
-    }
     const response = await fetch(url, {
       signal: AbortSignal.timeout(LOCAL_MEDIA_DOWNLOAD_TIMEOUT_MS),
     });

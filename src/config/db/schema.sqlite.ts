@@ -99,6 +99,17 @@ export const generationHistory = sqliteTable(
       onDelete: 'set null',
     }),
     effectId: integer('effect_id').notNull(),
+    /**
+     * Provider-neutral generation identity (added in Phase 1C).
+     * `providerId` is the id of the provider that executed the generation,
+     * `modelId` is the Slate logical model id. Both are written at submit time
+     * so a history row answers "which provider + which logical model created
+     * this" without routing back through ACTIVE_GENERATION_PROVIDER_ID.
+     * Nullable for rows created before Phase 1C; `effectId` remains the
+     * provider-private numeric reference.
+     */
+    providerId: text('provider_id'),
+    modelId: text('model_id'),
     status: text('status').notNull(),
     providerTaskId: text('provider_task_id'),
     lifecyclePhase: text('lifecycle_phase'),

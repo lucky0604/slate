@@ -5,6 +5,7 @@ import {
   getWorkspaceEffectRegistryEntry,
   getWorkspaceEffectRegistryEntryByEffectId,
 } from '@/core/effects/effect-registry';
+import { resolveGenerationProvenance } from '@/core/effects/generation-provenance';
 import { resolveOutputMedia } from '@/core/effects/output-media';
 import {
   isVideoAnalysisEffectId,
@@ -87,6 +88,9 @@ type ProjectGenerationRow = {
   status: string;
   submittedPrompt: string | null;
   effectId: number;
+  /** Provider-neutral history identity columns (Phase 1C). Nullable for legacy rows. */
+  providerId: string | null;
+  modelId: string | null;
   input: unknown;
   output: unknown;
   error: string | null;
@@ -97,13 +101,20 @@ export const toProjectGenerationItem = (
   row: ProjectGenerationRow
 ): ProjectGenerationItem => {
   const input = asRecord(row.input);
-  const providerIdentity = asRecord(input?._provider);
-  const recordedModelId = readString(providerIdentity?.modelId);
-  const entry = recordedModelId
-    ? getWorkspaceEffectRegistryEntry(recordedModelId)
-    : getWorkspaceEffectRegistryEntryByEffectId(row.effectId);
+  const provenance = resolveGenerationProvenance({
+    providerId: row.providerId,
+    modelId: row.modelId,
+    input: row.input,
+  });
+  const entry = provenance.modelId
+    ? getWorkspaceEffectRegistryEntry(provenance.modelId)
+    : provenance.providerId
+      ? getWorkspaceEffectRegistryEntryByEffectId(row.effectId, provenance.providerId)
+      : null;
   const isAnalysis =
-    recordedModelId === 'video-analysis' || isVideoAnalysisEffectId(row.effectId);
+    provenance.modelId === 'video-analysis' ||
+    (!provenance.modelId &&
+      Boolean(provenance.providerId && isVideoAnalysisEffectId(row.effectId)));
   const media = resolveOutputMedia(row.output);
   const analysisModelName =
     input?.analysis_depth === 'deep'
@@ -119,9 +130,8 @@ export const toProjectGenerationItem = (
     status: row.status as GenerationStatus,
     prompt: row.submittedPrompt,
     modelId:
-      recordedModelId ??
-      readString(input?.model) ??
-      entry?.id ??
+      provenance.modelId ??
+      (provenance.providerId ? readString(input?.model) ?? entry?.id : null) ??
       (isAnalysis ? 'video-analysis' : null),
     modelName: entry?.name ?? (isAnalysis ? analysisModelName : null),
     mediaType: isAnalysis
@@ -159,6 +169,8 @@ export async function listProjectGenerations(projectId: string, limit = 80) {
       status: generationHistory.status,
       submittedPrompt: generationHistory.submittedPrompt,
       effectId: generationHistory.effectId,
+      providerId: generationHistory.providerId,
+      modelId: generationHistory.modelId,
       input: generationHistory.input,
       output: generationHistory.output,
       error: generationHistory.error,

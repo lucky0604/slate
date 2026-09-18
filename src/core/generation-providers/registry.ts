@@ -13,6 +13,21 @@ import type {
 const providers = new Map<string, GenerationProviderDefinition>();
 let initialized = false;
 
+/**
+ * TEST/DEV ONLY active-provider override.
+ *
+ * ACTIVE_GENERATION_PROVIDER_ID is a compile-time default for the UI catalog
+ * and legacy fallback. This seam lets provider-neutral tests point the legacy
+ * fallback at a registered test provider so the fallback path can be exercised
+ * without a real remote provider. It is never set by production code.
+ */
+let activeProviderIdOverride: string | null = null;
+
+/** TEST/DEV ONLY. Set to a registered provider id (or null to restore default). */
+export function setActiveGenerationProviderIdForTests(id: string | null) {
+  activeProviderIdOverride = id;
+}
+
 function addProvider(provider: GenerationProviderDefinition) {
   const id = provider.id.trim();
   if (!id) throw new Error('Generation provider id is required.');
@@ -62,7 +77,9 @@ export function getGenerationProvider(providerId: string) {
 
 export function getActiveGenerationProviderId() {
   ensureProvidersRegistered();
-  const requested = ACTIVE_GENERATION_PROVIDER_ID.trim() || BEATAPI_PROVIDER_ID;
+  const requested =
+    (activeProviderIdOverride ?? ACTIVE_GENERATION_PROVIDER_ID).trim() ||
+    BEATAPI_PROVIDER_ID;
   if (!providers.has(requested)) {
     throw new Error(
       `Generation provider ${requested} is not registered. Register it and select it in src/config/generation-providers.ts.`

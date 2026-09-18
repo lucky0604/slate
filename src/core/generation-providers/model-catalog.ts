@@ -9,8 +9,9 @@ import {
 } from '@/core/effects/video-analysis';
 
 import {
-  getActiveGenerationProvider,
+  getActiveGenerationProviderId,
   getGenerationModelBinding,
+  getGenerationProvider,
 } from './registry';
 
 const defaultsFromEntry = (entry: WorkspaceEffectRegistryEntry) => ({
@@ -43,10 +44,13 @@ export type GenerationModelDescriptor = {
   referenceSchema: unknown;
 };
 
-export function listGenerationModelDescriptors(): GenerationModelDescriptor[] {
-  const provider = getActiveGenerationProvider();
+export function listGenerationModelDescriptors(providerId?: string): GenerationModelDescriptor[] {
+  const provider = getGenerationProvider(
+    providerId ?? getActiveGenerationProviderId()
+  );
+  if (!provider) return [];
   return provider.modelBindings.flatMap<GenerationModelDescriptor>((binding) => {
-    const effect = getRegisteredEffectById(binding.effectId);
+    const effect = getRegisteredEffectById(binding.effectId, provider.id);
     if (!effect) return [];
     if (binding.modelId === VIDEO_ANALYSIS_MODEL_ID) {
       return [
@@ -86,24 +90,34 @@ export function listGenerationModelDescriptors(): GenerationModelDescriptor[] {
   });
 }
 
-export function getGenerationModelDescriptor(modelId: string) {
+export function getGenerationModelDescriptor(
+  modelId: string,
+  providerId?: string
+) {
   return (
-    listGenerationModelDescriptors().find((model) => model.id === modelId) ??
-    null
+    listGenerationModelDescriptors(providerId).find(
+      (model) => model.id === modelId
+    ) ?? null
   );
 }
 
 export function validateGenerationModelInput({
   modelId,
   input,
+  providerId,
 }: {
   modelId: string;
   input: Record<string, unknown>;
+  /** Explicit provider scope. Defaults to the active provider (catalog/legacy). */
+  providerId?: string;
 }) {
-  const provider = getActiveGenerationProvider();
+  const provider = getGenerationProvider(
+    providerId ?? getActiveGenerationProviderId()
+  );
+  if (!provider) throw new Error(`Generation provider ${providerId} is not registered.`);
   const binding = getGenerationModelBinding({ modelId, providerId: provider.id });
   if (!binding) throw new Error(`Model ${modelId} is not available from ${provider.label}.`);
-  const effect = getRegisteredEffectById(binding.effectId);
+  const effect = getRegisteredEffectById(binding.effectId, provider.id);
   if (!effect) throw new Error(`Model ${modelId} is not registered.`);
   provider.validateInput?.(effect, input);
   return { provider, binding, effect };
