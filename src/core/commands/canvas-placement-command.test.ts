@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import type { CanvasCard } from '@/core/beatcanvas/canvas-types';
 import { createEmptyProjectSnapshot } from '@/core/projects/project-snapshot';
+import { buildShotProjectionCard } from '@/core/story/shot-projection';
 
 import { applyCanvasOperations } from './canvas-commands';
 import { canvasOperationSchema } from './schema';
@@ -92,4 +93,31 @@ test('place_card lays out a target once and later manual movement stays saved', 
     w: 300,
     h: 200,
   });
+});
+
+test('canvas removal preserves Story Shot projections unless explicitly authorized', () => {
+  const shotCard = buildShotProjectionCard({
+    id: 'shot-1',
+    position: 0,
+    description: 'Projection',
+  });
+  const source = {
+    ...createEmptyProjectSnapshot(),
+    cards: [shotCard],
+    frames: { [shotCard.id]: { x: 40, y: 190, w: 240, h: 150 } },
+  };
+
+  const preserved = applyCanvasOperations(source, [
+    { type: 'remove_card', cardId: shotCard.id },
+  ]);
+  assert.equal(preserved.document.cards.some((card) => card.id === shotCard.id), true);
+  assert.deepEqual(preserved.document.frames[shotCard.id], source.frames[shotCard.id]);
+
+  const removed = applyCanvasOperations(
+    source,
+    [{ type: 'remove_card', cardId: shotCard.id }],
+    { allowShotProjectionRemoval: true }
+  );
+  assert.equal(removed.document.cards.some((card) => card.id === shotCard.id), false);
+  assert.equal(removed.document.frames[shotCard.id], undefined);
 });

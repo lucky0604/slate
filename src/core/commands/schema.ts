@@ -110,6 +110,7 @@ const generationSnapshotSchema = z
 const canvasCardCommonShape = {
   id: commandIdSchema,
   assetId: commandIdSchema.nullable().optional(),
+  shotId: commandIdSchema.nullable().optional(),
   generationMode: generationModeSchema.optional(),
   analysisDepth: analysisDepthSchema.optional(),
   name: z.string().trim().min(1).max(500),
@@ -171,6 +172,16 @@ const canvasCardUnion = z.discriminatedUnion('kind', [
       sourceConfigCardId: commandIdSchema,
       generationRunId: commandIdSchema,
       generationSnapshot: generationSnapshotSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...canvasCardCommonShape,
+      kind: z.literal('shot'),
+      // Shot projection card: a thin projection of a Story/Scene/Shot domain
+      // shot. `shotId` is required and is the card's only pointer to Domain.
+      type: z.enum(['image', 'video']),
+      shotId: commandIdSchema,
     })
     .strict(),
 ]);

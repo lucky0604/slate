@@ -305,6 +305,42 @@ export async function updateShot(
   };
 }
 
+export async function deleteShot(
+  projectId: string,
+  input: { shotId: string; expectedRevision: number }
+): Promise<DomainWriteResult> {
+  const ownership = await storyRepository.resolveShotOwnership(
+    projectId,
+    input.shotId
+  );
+  if (!ownership) {
+    throw domainNotFoundError('Shot not found in this project.');
+  }
+  const existing = await storyRepository.getShotByIdForProject(
+    projectId,
+    input.shotId
+  );
+  if (!existing) {
+    throw domainNotFoundError('Shot not found in this project.');
+  }
+
+  const deleted = await storyRepository.deleteShotByIdAndRevision({
+    id: input.shotId,
+    sceneIdOfShot: ownership.sceneId,
+    expectedRevision: input.expectedRevision,
+  });
+  if (!deleted) {
+    throw domainConflictError(
+      `Shot revision conflict: expected ${input.expectedRevision}.`
+    );
+  }
+  return {
+    entityType: 'shot',
+    entityId: input.shotId,
+    revision: input.expectedRevision + 1,
+  };
+}
+
 /** Resolve a scene's existence confined to `projectId`, or throw NOT_FOUND. */
 async function resolveSceneForProjectOrThrow(
   projectId: string,

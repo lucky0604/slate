@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
+
+import { createClient } from '@libsql/client';
 
 import { BEATDESIGN_MCP_TOOL_NAMES } from './tools';
 
@@ -34,15 +38,38 @@ const readJsonLine = async (
   });
 
 test('MCP stdio handshake lists the catalogued tools and can list projects', async () => {
-  const child = spawn(
-    resolve('node_modules/.bin/tsx'),
-    ['scripts/mcp-server.ts'],
-    {
-      cwd: resolve('.'),
-      env: { ...process.env, NODE_ENV: 'development' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }
-  );
+  const testDataRoot = await mkdtemp(join(tmpdir(), 'slate-mcp-stdio-'));
+  const testDb = createClient({
+    url: `file:${join(testDataRoot, 'local.db')}`,
+  });
+  await testDb.executeMultiple(`
+    CREATE TABLE project (
+      id text PRIMARY KEY NOT NULL,
+      name text NOT NULL,
+      cover_asset_id text,
+      status text NOT NULL DEFAULT 'active',
+      current_state_version integer NOT NULL DEFAULT 1,
+      last_workspace_mode text NOT NULL DEFAULT 'canvas',
+      last_opened_at integer,
+      archived_at integer,
+      deleted_at integer,
+      created_at integer NOT NULL,
+      updated_at integer NOT NULL
+    );
+    CREATE TABLE asset (
+      id text PRIMARY KEY NOT NULL,
+      public_url text
+    );
+  `);
+  const child = spawn(resolve('node_modules/.bin/tsx'), ['scripts/mcp-server.ts'], {
+    cwd: resolve('.'),
+    env: {
+      ...process.env,
+      NODE_ENV: 'development',
+      BEATDESIGN_DATA_DIR: testDataRoot,
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
 
   try {
     send(child, {
@@ -163,5 +190,7 @@ test('MCP stdio handshake lists the catalogued tools and can list projects', asy
     assert.ok(Array.isArray(payload.structuredContent?.result));
   } finally {
     child.kill();
+    testDb.close();
+    await rm(testDataRoot, { recursive: true, force: true });
   }
 });

@@ -7,6 +7,7 @@ import {
 import {
   createScene,
   createShot,
+  deleteShot,
   createStory,
   updateScene,
   updateShot,
@@ -112,6 +113,14 @@ export const shotUpdateSchema = z
     message: 'Shot update must modify at least one field.',
   });
 
+export const shotDeleteSchema = z
+  .object({
+    type: z.literal('shot.delete'),
+    shotId: idSchema,
+    expectedRevision: expectedRevisionSchema,
+  })
+  .strict();
+
 const domainPersistence: CommandPersistence = { kind: 'domain' };
 
 export const storyCreateHandler: CommandHandler<typeof storyCreateSchema> = {
@@ -204,6 +213,19 @@ export const shotUpdateHandler: CommandHandler<typeof shotUpdateSchema> = {
   },
 };
 
+export const shotDeleteHandler: CommandHandler<typeof shotDeleteSchema> = {
+  commandType: 'shot.delete',
+  schema: shotDeleteSchema,
+  persistence: domainPersistence,
+  async execute(context, command) {
+    const result = await deleteShot(context.projectId, {
+      shotId: command.shotId,
+      expectedRevision: command.expectedRevision,
+    });
+    return { changedIds: [result.entityId], data: result };
+  },
+};
+
 /** The production Story/Scene/Shot domain command catalog (Phase 2A). */
 export const domainCommandHandlers: CommandHandler[] = [
   storyCreateHandler,
@@ -212,4 +234,5 @@ export const domainCommandHandlers: CommandHandler[] = [
   sceneUpdateHandler,
   shotCreateHandler,
   shotUpdateHandler,
+  shotDeleteHandler,
 ];

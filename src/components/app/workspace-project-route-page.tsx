@@ -3,6 +3,7 @@ import { ProjectAssetsWorkspace } from '@/components/app/project-assets-workspac
 import { BeatStudioWorkspace } from '@/components/studio/beat-studio-workspace';
 import { BeatCanvasShell } from '@/components/beatcanvas/beatcanvas-shell';
 import { VideoEditorWorkspace } from '@/components/editor/video-editor-workspace';
+import { StoryWorkspace } from '@/components/story-workspace/story-workspace';
 import type { loadWorkspaceProjectRoute } from '@/core/projects/workspace-project-route-loader';
 
 type WorkspaceProjectRouteData = Awaited<
@@ -34,6 +35,8 @@ export function WorkspaceProjectRoutePage({
           projectId={data.project.id}
           projectName={data.project.name}
         />
+      ) : data.workspaceMode === 'story' ? (
+        <StoryWorkspace projectId={data.project.id} />
       ) : (
         <BeatCanvasShell
           projectId={data.project.id}

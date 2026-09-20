@@ -56,6 +56,7 @@ export function buildBeatDesignWorkspaceHandoff({
     }),
     editor: buildViewUrl({ projectId, view: 'editor', time }),
     assets: buildViewUrl({ projectId, view: 'assets' }),
+    story: buildViewUrl({ projectId, view: 'story' }),
   };
   const workspaceUrl = urls[activeView];
   const browserUrl = new URL(workspaceUrl);

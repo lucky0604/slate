@@ -433,7 +433,7 @@ function BeatCanvasReactFlowCanvas({
             height:
               typeof nextProps.h === 'number'
                 ? nextProps.h
-                : existing?.style?.height,
+              : existing?.style?.height,
           },
         };
         commitNodes((current) => [
@@ -547,10 +547,6 @@ function BeatCanvasReactFlowCanvas({
 
   const onNodesChange = useCallback(
     (changes: NodeChange<BeatCanvasFlowNode>[]) => {
-      const hasRemovals = changes.some((change) => change.type === 'remove');
-      if (hasRemovals) {
-        checkpointForDelete();
-      }
       const directlyRemovedIds = new Set(
         changes
           .filter(
@@ -563,6 +559,9 @@ function BeatCanvasReactFlowCanvas({
           )
           .map((change) => change.id)
       );
+      if (directlyRemovedIds.size > 0) {
+        checkpointForDelete();
+      }
       const removedIds = new Set(directlyRemovedIds);
       let foundDescendant = true;
       while (foundDescendant) {

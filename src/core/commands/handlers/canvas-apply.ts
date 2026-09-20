@@ -23,7 +23,8 @@ export const canvasApplyHandler: CommandHandler<
     }
     const applied = applyCanvasOperations(
       context.documents.canvas,
-      command.operations
+      command.operations,
+      { allowShotProjectionRemoval: context.origin === 'ui' }
     );
     return {
       changedIds: applied.changedIds,

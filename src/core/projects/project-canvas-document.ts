@@ -3,9 +3,11 @@ import {
   type CanvasDraftCard,
   type CanvasGenerationCard,
   type CanvasOutputCard,
+  type CanvasShotCard,
   isCanvasDraftCard,
   isCanvasGenerationCard,
   isCanvasOutputCard,
+  isCanvasShotCard,
 } from '@/core/beatcanvas/canvas-types';
 
 import { isTransientCanvasUrl } from '@/core/beatcanvas/local-references';
@@ -14,6 +16,7 @@ import type {
   ProjectSnapshotDocument,
   ProjectSnapshotShapeFrame,
 } from './project-snapshot';
+import { normalizeProjectSnapshotDocument } from './project-snapshot';
 
 type SnapshotFramesById = Record<string, ProjectSnapshotShapeFrame>;
 type NonDraftCanvasCard = CanvasCard & {
@@ -115,6 +118,35 @@ export const buildProjectSnapshotDocument = ({
   };
 };
 
+/**
+ * Merge Story Shot projections back into a Media Canvas capture without
+ * materializing them as Media Canvas cards or nodes. The Story Workspace owns
+ * their meaning; Media Canvas only carries their opaque snapshot state so a
+ * restore/capture/autosave round-trip remains lossless.
+ */
+export const mergePreservedShotProjections = ({
+  document,
+  shotCards,
+  shotFrames,
+}: {
+  document: ProjectSnapshotDocument;
+  shotCards: readonly CanvasShotCard[];
+  shotFrames: Record<string, ProjectSnapshotShapeFrame>;
+}): ProjectSnapshotDocument => {
+  if (shotCards.length === 0) return document;
+
+  const cardsById = new Map(document.cards.map((card) => [card.id, card] as const));
+  for (const card of shotCards) {
+    cardsById.set(card.id, card);
+  }
+
+  return normalizeProjectSnapshotDocument({
+    ...document,
+    cards: [...cardsById.values()],
+    frames: { ...document.frames, ...shotFrames },
+  });
+};
+
 type SnapshotRestoreCard<TCard extends CanvasCard> = {
   card: TCard;
   frame?: ProjectSnapshotShapeFrame;
@@ -129,6 +161,8 @@ export type ProjectSnapshotRestorePlan = {
   assetCards: Array<SnapshotRestoreCard<NonDraftCanvasCard>>;
   draftCards: Array<SnapshotRestoreCard<CanvasGenerationCard>>;
   outputCards: Array<SnapshotRestoreCard<CanvasOutputCard>>;
+  /** Shot projection cards (Phase 2B): preserved on restore so no layout is lost. */
+  shotCards: Array<SnapshotRestoreCard<CanvasShotCard>>;
   connectors: SnapshotConnector[];
 };
 
@@ -181,6 +215,17 @@ export const createProjectSnapshotRestorePlan = (
       frame: document.frames[card.id],
     }));
 
+  // Shot projection cards are preserved as-is on restore so a domain-shot
+  // projection and its canvas frame never get dropped when another surface
+  // (e.g. the media canvas) round-trips the shared snapshot.
+  const shotCards = document.cards
+    .filter(isCanvasShotCard)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((card) => ({
+      card,
+      frame: document.frames[card.id],
+    }));
+
   const connectorIds = new Set<string>();
   const connectors: SnapshotConnector[] = [];
 
@@ -203,6 +248,7 @@ export const createProjectSnapshotRestorePlan = (
     assetCards,
     draftCards,
     outputCards,
+    shotCards,
     connectors,
   };
 };

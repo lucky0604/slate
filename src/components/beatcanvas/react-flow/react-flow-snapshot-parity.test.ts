@@ -5,8 +5,10 @@ import {
   buildProjectSnapshotDocument,
   createProjectSnapshotRestorePlan,
   mergeCanvasRuntimeCardsIntoHistoryDocument,
+  mergePreservedShotProjections,
 } from '@/core/projects/project-canvas-document';
 import type { CanvasCard } from '@/core/beatcanvas/canvas-types';
+import { buildShotProjectionCard } from '@/core/story/shot-projection';
 
 const assetCard: CanvasCard = {
   id: 'shape:source',
@@ -118,6 +120,41 @@ test('keeps the version 3 project document canonical across React Flow restore',
     w: 420,
     h: 748,
   });
+});
+
+test('Media Canvas capture preserves Shot projections without materializing nodes', () => {
+  const shotCard = buildShotProjectionCard({
+    id: 'shot-1',
+    position: 0,
+    description: 'A preserved Story projection',
+  });
+  const mediaDocument = buildProjectSnapshotDocument({
+    cardsById: { [assetCard.id]: assetCard },
+    framesById: { [assetCard.id]: { x: 120, y: 180, w: 360, h: 360 } },
+  });
+
+  assert.equal(mediaDocument.cards.some((card) => card.kind === 'shot'), false);
+  const captured = mergePreservedShotProjections({
+    document: mediaDocument,
+    shotCards: [shotCard],
+    shotFrames: {
+      [shotCard.id]: { x: 800, y: 240, w: 240, h: 150 },
+    },
+  });
+  const restorePlan = createProjectSnapshotRestorePlan(captured);
+
+  assert.equal(restorePlan.shotCards.length, 1);
+  assert.deepEqual(restorePlan.shotCards[0]?.frame, {
+    x: 800,
+    y: 240,
+    w: 240,
+    h: 150,
+  });
+  assert.equal(
+    restorePlan.assetCards.some(({ card }) => card.id === shotCard.id),
+    false,
+    'Shot projections stay out of the Media Canvas asset restore path'
+  );
 });
 
 test('undo history preserves generated outputs and their latest runtime state', () => {

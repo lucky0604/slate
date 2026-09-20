@@ -164,16 +164,54 @@ const normalizeCard = (value: unknown): CanvasCard | null => {
     typeof value.modelId === 'string'
       ? value.modelId
       : '';
+  const shotId =
+    typeof value.shotId === 'string' && value.shotId.trim().length > 0
+      ? value.shotId.trim().slice(0, MAX_ID_CHARS)
+      : null;
 
   if (
     !id ||
     id.length > MAX_ID_CHARS ||
-    !['asset', 'generation', 'output'].includes(kind || '') ||
+    !['asset', 'generation', 'output', 'shot'].includes(kind || '') ||
     !['image', 'video', 'audio', 'timeline'].includes(type || '') ||
     !name ||
     name.length > MAX_NAME_CHARS
   ) {
     return null;
+  }
+  // A shot projection card must point at a Story/Scene/Shot domain shot id.
+  if (
+    kind === 'shot' &&
+    (!shotId || (type !== 'image' && type !== 'video'))
+  ) {
+    return null;
+  }
+  // Shot cards never carry media/generation payload; normalizing away accidental
+  // generation fields keeps the projection thin.
+  if (kind === 'shot') {
+    const shotCard: CanvasCard & { kind: 'shot' } = {
+      id,
+      shotId: shotId as string,
+      assetId: null,
+      kind: 'shot',
+      type: type as 'image' | 'video',
+      name,
+      url: null,
+      prompt: '',
+      referenceCardIds,
+      workflowTemplateId: null,
+      status: 'idle',
+      error: null,
+      modelId: '',
+      aspectRatio: '1:1',
+      outputQuality: '1k',
+      duration: '5s',
+      mode: 'quality',
+      variant: 'standard',
+      quality: 'standard',
+      sourceGenerationId: null,
+    };
+    return shotCard;
   }
 
   const sourceConfigCardId =

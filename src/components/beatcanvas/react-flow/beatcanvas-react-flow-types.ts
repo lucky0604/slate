@@ -50,6 +50,7 @@ export type WorkflowGroupNodeProps = {
   h: number;
 };
 
+/** Shot projection card props (Phase 2B) — display-only projection of a Shot. */
 export type BeatCanvasNodeData = Record<string, unknown> & {
   meta: BeatCanvasNodeMeta;
   props:

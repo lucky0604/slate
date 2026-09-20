@@ -128,6 +128,7 @@ test('all current production command types are registered in the default registr
     'scene.create',
     'scene.update',
     'shot.create',
+    'shot.delete',
     'shot.update',
     'story.create',
     'story.update',

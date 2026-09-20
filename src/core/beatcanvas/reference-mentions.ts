@@ -52,7 +52,13 @@ export const buildCanvasReferenceMentions = ({
 
   return referenceCardIds.flatMap((cardId) => {
     const card = cards[cardId];
-    if (!card || (card.type !== 'image' && card.type !== 'video')) return [];
+    if (
+      !card ||
+      card.kind === 'shot' ||
+      (card.type !== 'image' && card.type !== 'video')
+    ) {
+      return [];
+    }
 
     counts[card.type] += 1;
     const index = counts[card.type];

@@ -330,8 +330,8 @@
           "status": {
             "queued": "キュー待ち",
             "generating": "生成中",
-        "ready": "成功",
-        "success": "成功",
+            "ready": "成功",
+            "success": "成功",
             "failed": "失敗"
           },
           "fromCanvas": "Canvasから",
@@ -712,7 +712,8 @@
           "saving": "保存中…",
           "saved": "ストレージ設定を保存しました"
         }
-      }
+      },
+      "story": "ストーリー"
     }
   },
   "BeatAPI": {
@@ -753,5 +754,44 @@
   },
   "Common": {
     "loading": "読み込み中"
+  },
+  "StoryWorkspace": {
+    "title": "ストーリー",
+    "storySelectorLabel": "ストーリー",
+    "scenesTitle": "シーン",
+    "addScene": "シーンを追加",
+    "addShot": "ショットを追加",
+    "createStoryTitle": "最初のストーリーを作成",
+    "createStoryDescription": "ストーリーはシーンとショットを整理します。",
+    "createStoryButton": "ストーリーを作成",
+    "createFirstScene": "最初のシーンを作成",
+    "createSceneEmptyDescription": "シーンを追加してショットを配置します。",
+    "addFirstShot": "最初のショットを追加",
+    "addShotEmptyDescription": "このシーンにはまだショットがありません。",
+    "newSceneName": "新規シーン",
+    "newShotDescription": "新規ショット",
+    "shotLabel": "ショット {number}",
+    "seconds": "{value} 秒",
+    "noDescription": "説明なし",
+    "detailDurationLabel": "長さ（秒）",
+    "detailDurationHint": "ショットには {ms} ミリ秒が保存されます",
+    "detailPositionLabel": "順序",
+    "detailPositionHint": "ナラティブ上の位置（0 始まり）。ドラッグでは変わりません。",
+    "saveShot": "ショットを保存",
+    "savingShot": "保存中...",
+    "deleteShot": "ショットを削除",
+    "deletingShot": "削除中...",
+    "saveFailed": "編集を保存できませんでした。",
+    "staleShot": "このショットは開いた後に変更されました。",
+    "staleShotRefresh": "更新",
+    "revisionConflict": "{entity} が別のエディタで変更されました。更新して最新版を読み込んでください。",
+    "notFound": "この項目は存在しません。",
+    "commandFailed": "問題が発生しました。もう一度お試しください。",
+    "noSelectedShot": "ショットを選択して確認してください。",
+    "sceneTitleLabel": "シーン",
+    "sceneSummaryLabel": "要約",
+    "editScene": "シーンを保存",
+    "storyTitleLabel": "ストーリー",
+    "descriptionLabel": "説明"
   }
 }

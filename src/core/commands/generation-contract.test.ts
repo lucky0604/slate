@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { CanvasCard } from '@/core/beatcanvas/canvas-types';
+import { buildShotProjectionCard } from '@/core/story/shot-projection';
 
 import {
   buildAssetFirstReferencesFromCanvasCards,
@@ -82,5 +83,21 @@ test('non-image references retain only their media-level roles', () => {
       { assetId: 'asset-video', role: 'source' },
       { assetId: 'asset-audio', role: 'audio_track' },
     ]
+  );
+});
+
+test('Shot projections never become asset-first generation references', () => {
+  const shotCard = buildShotProjectionCard({
+    id: 'shot-1',
+    position: 0,
+    description: 'A projection, not media',
+  });
+
+  assert.deepEqual(
+    buildAssetFirstReferencesFromCanvasCards({
+      cards: { [shotCard.id]: shotCard },
+      referenceCardIds: [shotCard.id],
+    }),
+    []
   );
 });

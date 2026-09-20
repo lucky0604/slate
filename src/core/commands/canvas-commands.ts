@@ -1,4 +1,8 @@
-import type { CanvasAssetCard, CanvasCard } from '@/core/beatcanvas/canvas-types';
+import {
+  isCanvasShotCard,
+  type CanvasAssetCard,
+  type CanvasCard,
+} from '@/core/beatcanvas/canvas-types';
 import { resolveCanvasPlacement } from '@/core/beatcanvas/upload-layout';
 import {
   normalizeProjectSnapshotDocument,
@@ -112,7 +116,8 @@ export type CanvasCommandApplication = {
 
 export function applyCanvasOperations(
   source: ProjectSnapshotDocument,
-  operations: readonly CanvasOperation[]
+  operations: readonly CanvasOperation[],
+  options: { allowShotProjectionRemoval?: boolean } = {}
 ): CanvasCommandApplication {
   let cards = [...source.cards];
   let frames = { ...source.frames };
@@ -132,7 +137,15 @@ export function applyCanvasOperations(
     }
 
     if (operation.type === 'remove_card') {
-      if (!cards.some((card) => card.id === operation.cardId)) continue;
+      const card = cards.find((candidate) => candidate.id === operation.cardId);
+      // Shot cards are projections owned by the Story domain. Canvas layout
+      // commands may move them, but cannot remove their identity or frame.
+      if (
+        !card ||
+        (isCanvasShotCard(card) && !options.allowShotProjectionRemoval)
+      ) {
+        continue;
+      }
       cards = cards.filter((card) => card.id !== operation.cardId);
       delete frames[operation.cardId];
       cards = cards.map((card) => ({

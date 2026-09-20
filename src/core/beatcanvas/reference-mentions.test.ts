@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { buildShotProjectionCard } from '@/core/story/shot-projection';
 import type { CanvasCard } from './canvas-types';
 import {
   buildCanvasReferenceMentions,
@@ -57,6 +58,21 @@ test('numbers images and videos independently in API order', () => {
       { cardId: 'outfit', alias: '@Image2' },
       { cardId: 'camera', alias: '@Video2' },
     ]
+  );
+});
+
+test('does not expose Story Shot projections as media reference mentions', () => {
+  const shotCard = buildShotProjectionCard({
+    id: 'shot-1',
+    position: 0,
+    description: 'A shot projection',
+  });
+  assert.deepEqual(
+    buildCanvasReferenceMentions({
+      referenceCardIds: [shotCard.id],
+      cards: { ...cards, [shotCard.id]: shotCard },
+    }),
+    []
   );
 });
 

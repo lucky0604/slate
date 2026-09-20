@@ -330,8 +330,8 @@
           "status": {
             "queued": "Queued",
             "generating": "Generating",
-        "ready": "Success",
-        "success": "Success",
+            "ready": "Success",
+            "success": "Success",
             "failed": "Failed"
           },
           "fromCanvas": "From canvas",
@@ -712,7 +712,8 @@
           "saving": "Saving…",
           "saved": "Storage configuration saved"
         }
-      }
+      },
+      "story": "Story"
     }
   },
   "BeatAPI": {
@@ -753,5 +754,44 @@
   },
   "Common": {
     "loading": "Loading"
+  },
+  "StoryWorkspace": {
+    "title": "Story",
+    "storySelectorLabel": "Story",
+    "scenesTitle": "Scenes",
+    "addScene": "Add scene",
+    "addShot": "Add shot",
+    "createStoryTitle": "Create your first story",
+    "createStoryDescription": "A story organizes your scenes and shots.",
+    "createStoryButton": "Create story",
+    "createFirstScene": "Create first scene",
+    "createSceneEmptyDescription": "Add a scene to start arranging shots.",
+    "addFirstShot": "Add first shot",
+    "addShotEmptyDescription": "This scene has no shots yet.",
+    "newSceneName": "New scene",
+    "newShotDescription": "New shot",
+    "shotLabel": "Shot {number}",
+    "seconds": "{value} sec",
+    "noDescription": "No description",
+    "detailDurationLabel": "Duration (seconds)",
+    "detailDurationHint": "{ms} ms stored on the shot",
+    "detailPositionLabel": "Order",
+    "detailPositionHint": "Narrative position (0-based). Drag does not change this.",
+    "saveShot": "Save shot",
+    "savingShot": "Saving...",
+    "deleteShot": "Delete shot",
+    "deletingShot": "Deleting...",
+    "saveFailed": "Your edit was not saved.",
+    "staleShot": "This shot changed since you opened it.",
+    "staleShotRefresh": "Refresh",
+    "revisionConflict": "This {entity} changed in another editor. Refresh to load the latest revision.",
+    "notFound": "This item no longer exists.",
+    "commandFailed": "Something went wrong. Please try again.",
+    "noSelectedShot": "Select a shot to inspect it.",
+    "sceneTitleLabel": "Scene",
+    "sceneSummaryLabel": "Summary",
+    "editScene": "Save scene",
+    "storyTitleLabel": "Story",
+    "descriptionLabel": "Description"
   }
 }

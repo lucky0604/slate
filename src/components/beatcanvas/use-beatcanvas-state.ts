@@ -191,7 +191,9 @@ export function useBeatCanvasState() {
   }, []);
 
   const removeCanvasCardsForShapes = useCallback((shapeIds: string[]) => {
-    const removedIds = new Set(shapeIds);
+    const removedIds = new Set(
+      shapeIds.filter((shapeId) => canvasCardsRef.current[shapeId]?.kind !== 'shot')
+    );
     if (removedIds.size === 0) return;
     const nextCards = removeCanvasCardsForShapeIds(
       canvasCardsRef.current,

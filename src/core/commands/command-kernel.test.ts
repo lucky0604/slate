@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { CanvasAssetCard } from '@/core/beatcanvas/canvas-types';
+import type { CanvasAssetCard, CanvasShotCard } from '@/core/beatcanvas/canvas-types';
 import { createTimelineDocument } from '@/core/editor/timeline-document';
 import { validateLocalAssetImportCandidate } from '@/core/projects/import-local-asset';
 import { createEmptyProjectSnapshot } from '@/core/projects/project-snapshot';
@@ -150,6 +150,32 @@ test('external Canvas commands require project assets instead of arbitrary URLs'
         },
       }),
     /lastRenderAssetId/i
+  );
+});
+
+test('external Canvas commands cannot remove Story Shot projections', () => {
+  const shotCard: CanvasShotCard = {
+    ...assetCard,
+    id: 'shot:shot-1',
+    assetId: null,
+    kind: 'shot',
+    type: 'image',
+    url: null,
+    shotId: 'shot-1',
+  };
+
+  assert.throws(
+    () =>
+      validateExternalCommandAssetReferences({
+        origin: 'mcp',
+        command: {
+          type: 'canvas.apply',
+          operations: [
+            { type: 'remove_card', cardId: shotCard.id },
+          ],
+        },
+      }),
+    /cannot remove Story Shot projections/i
   );
 });
 

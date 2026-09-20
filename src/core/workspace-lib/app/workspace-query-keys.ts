@@ -37,3 +37,16 @@ export const projectGenerationsKeys = {
   list: (projectId: string) =>
     [...projectGenerationsKeys.all, 'list', projectId] as const,
 };
+
+/** Story Workspace read boundary query keys (Phase 2B). */
+export const storyWorkspaceKeys = {
+  all: ['story-workspace'] as const,
+  model: (projectId: string, storyId?: string | null, sceneId?: string | null) =>
+    [
+      ...storyWorkspaceKeys.all,
+      'model',
+      projectId,
+      storyId ?? null,
+      sceneId ?? null,
+    ] as const,
+};

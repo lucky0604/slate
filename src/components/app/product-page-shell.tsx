@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Images, LayoutPanelTop, Scissors, Workflow } from 'lucide-react';
+import { BookOpen, Images, LayoutPanelTop, Scissors, Workflow } from 'lucide-react';
 
 import { WorkspaceApiConfigDialog } from '@/components/app/workspace-api-config-dialog';
 import { LanguageSwitcher } from '@/components/app/language-switcher';
@@ -176,6 +176,15 @@ export function ProductPageShell({
                   >
                     <Images className="size-3.5" aria-hidden="true" />
                     <span className="hidden sm:inline">{t('header.assets')}</span>
+                  </Link>
+                  <Link
+                    href={`/story/${projectId}`}
+                    aria-current={workspaceMode === 'story' ? 'page' : undefined}
+                    aria-label={t('header.story')}
+                    className={workspaceTabClassName(workspaceMode === 'story')}
+                  >
+                    <BookOpen className="size-3.5" aria-hidden="true" />
+                    <span className="hidden sm:inline">{t('header.story')}</span>
                   </Link>
                 </nav>
               ) : null}

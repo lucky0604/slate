@@ -14,7 +14,7 @@ import type { VideoAnalysisDepth } from '@/core/effects/video-analysis';
 export type CanvasCardMediaType = 'image' | 'video';
 export type CanvasAssetMediaType = CanvasCardMediaType | 'audio' | 'timeline';
 export type CanvasGenerationMode = CanvasCardMediaType | 'analysis';
-export type CanvasCardKind = 'asset' | 'generation' | 'output';
+export type CanvasCardKind = 'asset' | 'generation' | 'output' | 'shot';
 export type CanvasCardStatus =
   | 'idle'
   | 'pending'
@@ -56,6 +56,8 @@ type CanvasCardBase = {
   audioRole?: 'music' | 'voice' | 'sound_effect' | 'source_audio' | 'reference';
   durationSec?: number | null;
   waveformPeaks?: number[];
+  /** Shot projection card: the owning Story/Scene/Shot domain shot id. */
+  shotId?: string | null;
   timelineId?: string | null;
   clipCount?: number | null;
   lastRenderAssetId?: string | null;
@@ -103,10 +105,26 @@ export type CanvasOutputCard = CanvasCardBase & {
   generationSnapshot: CanvasGenerationSnapshot;
 };
 
+/**
+ * Shot projection card (Phase 2B).
+ *
+ * A `shot` card is a thin **projection** of a Story/Scene/Shot domain row. It is
+ * NOT the shot's source of truth. It carries only the projection identity
+ * (`shotId`) plus the shared canvas identity/layout fields; authoritative Shot
+ * data (description, duration, narrative position, revision) is read from the
+ * Domain read model and never stored here.
+ */
+export type CanvasShotCard = CanvasCardBase & {
+  kind: 'shot';
+  type: CanvasCardMediaType;
+  shotId: string;
+};
+
 export type CanvasCard =
   | CanvasAssetCard
   | CanvasGenerationCard
-  | CanvasOutputCard;
+  | CanvasOutputCard
+  | CanvasShotCard;
 
 export const isCanvasGenerationCard = (
   card: CanvasCard | null | undefined
@@ -115,6 +133,10 @@ export const isCanvasGenerationCard = (
 export const isCanvasOutputCard = (
   card: CanvasCard | null | undefined
 ): card is CanvasOutputCard => card?.kind === 'output';
+
+export const isCanvasShotCard = (
+  card: CanvasCard | null | undefined
+): card is CanvasShotCard => card?.kind === 'shot';
 
 /** @deprecated Use isCanvasGenerationCard */
 export const isCanvasDraftCard = isCanvasGenerationCard;

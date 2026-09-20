@@ -343,6 +343,37 @@ export const storyRepository = {
     return rows.map((row: { shot: Shot }) => row.shot);
   },
 
+  async listShotsByProject(projectId: string): Promise<Shot[]> {
+    const handle = await getDb();
+    const rows = await handle
+      .select({ shot })
+      .from(shot)
+      .innerJoin(scene, eq(shot.sceneId, scene.id))
+      .innerJoin(story, eq(scene.storyId, story.id))
+      .where(eq(story.projectId, projectId))
+      .orderBy(shot.position, shot.id);
+    return rows.map((row: { shot: Shot }) => row.shot);
+  },
+
+  async deleteShotByIdAndRevision(input: {
+    id: string;
+    sceneIdOfShot: string;
+    expectedRevision: number;
+  }): Promise<boolean> {
+    const handle = await getDb();
+    const result = await handle
+      .delete(shot)
+      .where(
+        and(
+          eq(shot.id, input.id),
+          eq(shot.sceneId, input.sceneIdOfShot),
+          eq(shot.revision, input.expectedRevision)
+        )
+      )
+      .run();
+    return affectedCount(result) === 1;
+  },
+
   /** Append position for a new shot in a scene: MAX(position)+1 (or 0). */
   async maxShotPosition(
     sceneId: string,

@@ -712,7 +712,8 @@
           "saving": "保存中…",
           "saved": "存储配置已保存"
         }
-      }
+      },
+      "story": "故事"
     }
   },
   "BeatAPI": {
@@ -753,5 +754,44 @@
   },
   "Common": {
     "loading": "加载中"
+  },
+  "StoryWorkspace": {
+    "title": "故事",
+    "storySelectorLabel": "故事",
+    "scenesTitle": "场景",
+    "addScene": "添加场景",
+    "addShot": "添加镜头",
+    "createStoryTitle": "创建你的第一个故事",
+    "createStoryDescription": "故事用于组织场景与镜头。",
+    "createStoryButton": "创建故事",
+    "createFirstScene": "创建第一个场景",
+    "createSceneEmptyDescription": "添加一个场景以开始排列镜头。",
+    "addFirstShot": "添加第一个镜头",
+    "addShotEmptyDescription": "该场景还没有镜头。",
+    "newSceneName": "新场景",
+    "newShotDescription": "新镜头",
+    "shotLabel": "镜头 {number}",
+    "seconds": "{value} 秒",
+    "noDescription": "无描述",
+    "detailDurationLabel": "时长（秒）",
+    "detailDurationHint": "镜头存储 {ms} 毫秒",
+    "detailPositionLabel": "顺序",
+    "detailPositionHint": "叙事位置（从 0 开始）。拖拽不会改变此值。",
+    "saveShot": "保存镜头",
+    "savingShot": "保存中...",
+    "deleteShot": "删除镜头",
+    "deletingShot": "删除中...",
+    "saveFailed": "编辑未能保存。",
+    "staleShot": "该镜头在您打开后已被修改。",
+    "staleShotRefresh": "刷新",
+    "revisionConflict": "{entity} 已在其他编辑器中修改。刷新以加载最新版本。",
+    "notFound": "该项目已不存在。",
+    "commandFailed": "出错了，请重试。",
+    "noSelectedShot": "选择镜头以查看详情。",
+    "sceneTitleLabel": "场景",
+    "sceneSummaryLabel": "摘要",
+    "editScene": "保存场景",
+    "storyTitleLabel": "故事",
+    "descriptionLabel": "描述"
   }
 }

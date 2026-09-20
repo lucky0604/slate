@@ -42,6 +42,22 @@ test('keeps React Flow state out of the persisted project document', () => {
   );
 });
 
+test('keeps Story Shot projections preserve-only on the Media Canvas', () => {
+  const editorSource = readFileSync(
+    new URL('./react-flow-editor.tsx', import.meta.url),
+    'utf8'
+  );
+  const adapterSource = readFileSync(
+    new URL('../use-beatcanvas-react-flow-adapter.ts', import.meta.url),
+    'utf8'
+  );
+
+  assert.doesNotMatch(editorSource, /SHOT_CARD_NODE_TYPE|ShotCardNode/);
+  assert.match(adapterSource, /preservedShotCardsRef/);
+  assert.match(adapterSource, /mergePreservedShotProjections/);
+  assert.doesNotMatch(adapterSource, /insertShotCard/);
+});
+
 test('propagates a completed canvas drag into the project snapshot autosave signal', () => {
   const editorSource = readFileSync(
     new URL('./react-flow-editor.tsx', import.meta.url),

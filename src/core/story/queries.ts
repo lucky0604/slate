@@ -48,3 +48,7 @@ export async function listShots(
 ): Promise<Shot[]> {
   return storyRepository.listShotsByScene(projectId, sceneId);
 }
+
+export async function listProjectShots(projectId: string): Promise<Shot[]> {
+  return storyRepository.listShotsByProject(projectId);
+}

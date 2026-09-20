@@ -184,6 +184,13 @@ export function validateExternalCommandAssetReferences({
         'External timeline renders require lastRenderAssetId; the server derives lastRenderUrl.'
       );
     }
+
+    if (operation.type === 'remove_card' && operation.cardId.startsWith('shot:')) {
+      throw new BeatDesignCommandError(
+        'INVALID_COMMAND',
+        'External Canvas commands cannot remove Story Shot projections.'
+      );
+    }
   }
 }
 

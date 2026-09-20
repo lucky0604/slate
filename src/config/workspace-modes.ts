@@ -1,4 +1,10 @@
-export const workspaceModes = ['studio', 'canvas', 'editor', 'assets'] as const;
+export const workspaceModes = [
+  'studio',
+  'canvas',
+  'editor',
+  'assets',
+  'story',
+] as const;
 
 export type WorkspaceMode = (typeof workspaceModes)[number];
 
@@ -14,5 +20,6 @@ export function workspaceModePath(mode: WorkspaceMode) {
   if (mode === 'studio') return '/studio';
   if (mode === 'editor') return '/editor';
   if (mode === 'assets') return '/assets';
+  if (mode === 'story') return '/story';
   return '/canvas';
 }

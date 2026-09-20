@@ -6,6 +6,7 @@ import {
   buildProjectSnapshotDocument as buildProjectSnapshotDocumentFromCards,
   createProjectSnapshotRestorePlan,
   mergeCanvasRuntimeCardsIntoHistoryDocument,
+  mergePreservedShotProjections,
 } from '@/core/projects/project-canvas-document';
 import type {
   ProjectSnapshotDocument,
@@ -19,6 +20,7 @@ import type {
   CanvasCardMediaType,
   CanvasDraftCard,
   CanvasOutputCard,
+  CanvasShotCard,
 } from '@/core/beatcanvas/canvas-types';
 import { buildGenerationTakes } from '@/core/beatcanvas/generation-history';
 import {
@@ -505,6 +507,13 @@ export function useBeatCanvasReactFlowAdapter({
   const editorRef = useRef<BeatCanvasEditor | null>(null);
   const syncedDraftShapeSignaturesRef = useRef<Record<string, string>>({});
   const syncedAssetShapeSignaturesRef = useRef<Record<string, string>>({});
+  // Story Shot projections are opaque to Media Canvas. Keep them outside the
+  // rendered card/node state and merge them back into every captured snapshot
+  // so a media-canvas round trip cannot erase Story Workspace layout.
+  const preservedShotCardsRef = useRef<Record<string, CanvasShotCard>>({});
+  const preservedShotFramesRef = useRef<
+    Record<string, ProjectSnapshotShapeFrame>
+  >({});
   const undoStackRef = useRef<ProjectSnapshotDocument[]>([]);
   const redoStackRef = useRef<ProjectSnapshotDocument[]>([]);
   const isRestoringHistoryRef = useRef(false);
@@ -537,10 +546,20 @@ export function useBeatCanvasReactFlowAdapter({
       return accumulator;
     }, {});
 
-    return buildProjectSnapshotDocumentFromCards({
+    const mediaDocument = buildProjectSnapshotDocumentFromCards({
       cardsById: canvasCardsRef.current,
       framesById: frames,
       camera: editor?.getCamera(),
+    });
+    const preservedShotCards = Object.values(preservedShotCardsRef.current);
+    if (preservedShotCards.length === 0) {
+      return mediaDocument;
+    }
+
+    return mergePreservedShotProjections({
+      document: mediaDocument,
+      shotCards: preservedShotCards,
+      shotFrames: preservedShotFramesRef.current,
     });
   }, [canvasCardsRef]);
 
@@ -1497,6 +1516,15 @@ export function useBeatCanvasReactFlowAdapter({
         }
       }
 
+      preservedShotCardsRef.current = Object.fromEntries(
+        restorePlan.shotCards.map(({ card }) => [card.id, card])
+      );
+      preservedShotFramesRef.current = Object.fromEntries(
+        restorePlan.shotCards.flatMap(({ card, frame }) =>
+          frame ? [[card.id, frame] as const] : []
+        )
+      );
+
       for (const connector of restorePlan.connectors) {
         createConnectorBetweenCards(
           connector.sourceCardId,
@@ -1680,12 +1708,15 @@ export function useBeatCanvasReactFlowAdapter({
       if (!editor || typeof editor.deleteShape !== 'function') {
         return;
       }
+      if (canvasCardsRef.current[cardId]?.kind === 'shot') {
+        return;
+      }
 
       recordCanvasHistory();
       editor.deleteShape(cardId as any);
       removeCanvasCard(cardId);
     },
-    [recordCanvasHistory, removeCanvasCard]
+    [canvasCardsRef, recordCanvasHistory, removeCanvasCard]
   );
 
   const updateCanvasCardFrame = useCallback(
@@ -1754,6 +1785,7 @@ export function useBeatCanvasReactFlowAdapter({
       .filter(
         (shapeId) =>
           canvasCardsRef.current[shapeId]?.kind !== 'output' &&
+          canvasCardsRef.current[shapeId]?.kind !== 'shot' &&
           Boolean(canvasCardsRef.current[shapeId])
       );
     if (selectedCardIds.length === 0) {
